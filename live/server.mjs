@@ -2,11 +2,14 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import sharp from 'sharp';
+import { createPacer, SPEEDS } from './auto-pace.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -20,7 +23,7 @@ const PORT = +process.env.PORT || 3000;
 const settings = {
   title: 'Tử Vi Phát Đạt',
   subtitle: 'Gieo Quẻ Kinh Dịch · Luận Giải Nhân Duyên',
-  voice: 'google',
+  voice: 'vi-VN-NamMinhNeural',
   pitch: -10,
   rate: -2,
   music: true, musicVolume: 48, musicTrack: '',
@@ -32,6 +35,8 @@ const settings = {
   foodFrom: 6,
   beerFrom: 18,
   gifts: { readAll: true, minDiamonds: 1 },
+  // khách ảo giữ nhịp (xem auto-pace.mjs): không giả quà / KC / follow, tự nhường sóng khi có người thật
+  autoPace: true, autoPaceSpeed: 'normal', autoPaceMax: 8, autoPaceReadings: true, autoPaceLabel: true,
 };
 
 const viewers = new Map();
@@ -477,6 +482,7 @@ function rememberChat(id, text){
 const isCheer = t => /(^|\s)(nam\s*mo|cau\s*an|xin\s*que|khai\s*loc|hoan\s*hy|dai\s*cat|a\s*di\s*da)(\s|$|[!.,])/iu.test(normGift(t));
 
 function onChat(id, name, text, avatar){
+  pacer.markReal(id);
   text = String(text || '').slice(0, 120);
   rememberChat(id, text);
   const v = viewers.get(id);
@@ -505,6 +511,7 @@ function onChat(id, name, text, avatar){
 
 function onFollow(id, name, avatar){
   if (!id) return;
+  pacer.markReal(id);
   if (followerIds.size > 5000) followerIds.clear();
   followerIds.add(id);
   const { v } = seat(id, name, { avatar, followed: true });
@@ -519,6 +526,7 @@ const DICE_GIFTS = new Set(['co bon la', 'shamrock', 'xuc xac', 'dice', 'xin xam
 const isFollower = u => Number(u?.followInfo?.followStatus ?? 0) >= 1 || u?.isFollower === true;
 
 function onGift(id, name, giftName, count, diamonds, avatar, followed){
+  pacer.markReal(id);
   giftName = String(giftName || 'lộc').slice(0, 30);
   count = Math.max(1, Math.min(9999, +count || 1));
   const { v } = seat(id, name, { avatar, followed });
@@ -635,7 +643,7 @@ function say(text, meta = {}){
   ttsQueue.push({ text: s.slice(0, 500), meta }); pumpTTS();
 }
 async function warmTTS(){
-  if (ttsEngine() === 'google') return;
+  if (ttsEngine() === 'google' || await findPython()) return;
   try {
     await ttsClient().setMetadata(settings.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
     if (!ttsBusy) scheduleTTSIdle();
@@ -663,7 +671,37 @@ function splitChunks(text, max = TTS_CHUNK_CHARS){
   if (buf) chunks.push(buf);
   return chunks.length ? chunks : [String(text).slice(0, max)];
 }
+// Giọng Nam Minh qua gói Python edge-tts (giống dự án Thắp Sáng): ổn định hơn thư viện Node, tự thử lại trong một tiến trình.
+// Máy không có Python + edge-tts → dùng thư viện Node msedge-tts như cũ. Đặt PYTHON_BIN nếu python không nằm trong PATH.
+const SAY_PY = path.join(__dirname, 'edge_say.py');
+let pyBin = null, pyChecked = false;
+async function findPython(){
+  if (pyChecked) return pyBin;
+  pyChecked = true;
+  for (const bin of [...new Set([process.env.PYTHON_BIN, 'python', 'py'].filter(Boolean))]){
+    const ver = await new Promise(r => execFile(bin, ['-c', 'import edge_tts;print(edge_tts.__version__)'], { windowsHide: true, timeout: 15000 }, (err, out) => r(err ? null : String(out).trim())));
+    if (ver){ pyBin = bin; addLog(`Giọng Edge qua Python edge-tts ${ver} (${bin})`); return pyBin; }
+  }
+  addLog('Không thấy Python + edge-tts, dùng thư viện Node (kém ổn định hơn). Cài: pip install -U edge-tts');
+  return null;
+}
+let pySeq = 0;
+function pyChunk(text){
+  const id = `${process.pid}_${Date.now()}_${++pySeq}`;
+  const src = path.join(os.tmpdir(), `tuvi_${id}.txt`), dst = path.join(os.tmpdir(), `tuvi_${id}.mp3`);
+  fs.writeFileSync(src, text, 'utf8');   // truyền qua file UTF-8 để không lỗi dấu tiếng Việt trên Windows
+  const rate = `${settings.rate >= 0 ? '+' : ''}${settings.rate}%`, pitch = `${settings.pitch >= 0 ? '+' : ''}${settings.pitch}Hz`;
+  return new Promise((resolve, reject) => {
+    execFile(pyBin, [SAY_PY, settings.voice, rate, pitch, '+0%', src, dst, '6'], { windowsHide: true, timeout: 40_000 }, (err, _o, stderr) => {
+      let buf = null; try { buf = fs.readFileSync(dst); } catch {}
+      for (const f of [src, dst]) { try { fs.unlinkSync(f); } catch {} }
+      if (!err && buf && buf.length >= 1024) resolve(buf);
+      else reject(new Error(String(stderr || err?.message || 'Edge không trả âm thanh').trim().split('\n').pop()));
+    });
+  });
+}
 async function synthChunk(text){
+  if (await findPython()) return pyChunk(text);
   const t = ttsClient();
   await t.setMetadata(settings.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
   const { audioStream } = t.toStream(esc(text), { pitch: `${settings.pitch >= 0 ? '+' : ''}${settings.pitch}Hz`, rate: `${settings.rate >= 0 ? '+' : ''}${settings.rate}%` });
@@ -820,6 +858,7 @@ async function connectTikTok(uniqueId){
       });
       conn.on(EventType.like, d => {
         if (!alive() || !firstEvent(msgKey(d, 'like'))) return;
+        pacer.markReal(uid(d.user));
         broadcast({ t:'like', id: uid(d.user), n: +d.count || 1 });
       });
       conn.on(EventType.liveEnded, () => { if (!alive()) return; addLog('TikTok: live đã kết thúc'); disconnectTikTok(); });
@@ -914,7 +953,7 @@ function onControl(m){
     case 'clear': clearSeats(); break;
     case 'kick': {
       const id = String(m.id || '').slice(0, 64), v = viewers.get(id);
-      if (!v || !/^(sim|demo|bot)_/.test(id)) break;
+      if (!v || !/^(sim|demo|bot|auto)_/.test(id)) break;
       viewers.delete(id); broadcast({ t:'leave', id });
       addLog(`Đã xoá người xem mô phỏng: ${v.name}`); break;
     }
@@ -922,6 +961,7 @@ function onControl(m){
     case 'say': if (m.text) say(String(m.text).slice(0, 400), { tag:'say' }); break;
     case 'settings':
       applySettings(m.settings || {});
+      if (!settings.autoPace) pacer.clearAll();
       scheduleToast(); broadcast({ t:'settings', settings, cap: capacity(), barBeers: totalBeers }); break;
     case 'bots': setBots(!!m.on, +m.n || 12, m.pace); break;
   }
@@ -937,12 +977,29 @@ const SETTING_RULES = {
   seatMode: v => ['auto', '12', '24', '36', '48', '64'].includes(String(v)) ? String(v) : 'auto',
   phaseMode: v => ['auto', 'food', 'beer'].includes(v) ? v : 'auto',
   foodFrom: v => clamp(v, 0, 23), beerFrom: v => clamp(v, 0, 23),
+  autoPace: Boolean, autoPaceReadings: Boolean, autoPaceLabel: Boolean,
+  autoPaceSpeed: v => SPEEDS.includes(v) ? v : settings.autoPaceSpeed,
+  autoPaceMax: v => clamp(v, 0, 24),
 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(+v || 0)));
 function applySettings(o){
   for (const [k, fn] of Object.entries(SETTING_RULES)) if (k in o) settings[k] = fn(o[k]);
   if (settings.beerFrom <= settings.foodFrom + 1){ settings.foodFrom = 6; settings.beerFrom = 18; }
 }
+
+// Ông Đồ gieo quẻ khai lộc MIỄN PHÍ cho khách ảo: 0 KC, không cộng công đức / tổng bar, không phát sự kiện quà.
+function freeReading(v){
+  const hex = buildHexagram(v.topicId || 'tong_quan', 'khai_loc');
+  v.asked = true;
+  enqueueReading(v, { ...orderFromCoins(1, v.topic), coins: 0 }, hex);
+  addLog(`🎭 Ông Đồ gieo quẻ khai lộc cho khách ảo ${v.name} → Quẻ số ${hex.num} ${hex.name}`);
+  say(`Ông Đồ xin gieo quẻ khai lộc cho thí chủ ${spoken(v.name)}. ${hex.fullReading}`, { tag: 'auto', id: v.id });
+}
+const pacer = createPacer({
+  getSettings: () => settings, viewers, seat, onChat, broadcast, addLog,
+  readFree: freeReading,
+  busy: () => !!activeReading || readingQueue.length > 0 || ttsBusy || ttsQueue.length > 0,
+});
 
 let botTimer = null;
 const BOT_LINES = [
@@ -1052,4 +1109,5 @@ wss.on('connection', (ws, req) => {
 server.listen(PORT, HOST, () => {
   addLog(`Server Tử Vi Phát Đạt (BEAR) chạy tại http://localhost:${PORT}  ·  Bảng điều khiển: http://localhost:${PORT}/live/control.html  ·  Overlay: http://localhost:${PORT}/live/overlay.html`);
   setTimeout(warmTTS, 1200);
+  pacer.start();
 });

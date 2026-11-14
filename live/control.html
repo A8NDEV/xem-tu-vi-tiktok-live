@@ -125,6 +125,17 @@ button.red{background:var(--red);border-color:#d05245}
     <h2>Đổ người mẫu</h2>
     <div class="row"><button data-fill="12">12</button><button data-fill="24">24</button><button data-fill="36">36</button><button data-fill="48">48</button><button data-fill="64">64</button></div>
     <button class="red" id="btnClear">Làm trống phòng</button>
+    <h2>🎭 Khách ảo giữ nhịp live</h2>
+    <div class="row tight">
+      <label class="check"><input type="checkbox" id="autoPace" checked> Bật khách ảo tự động</label>
+      <label class="check"><input type="checkbox" id="autoPaceReadings" checked> Ông Đồ gieo quẻ miễn phí cho khách ảo</label>
+      <label class="check"><input type="checkbox" id="autoPaceLabel" checked> Gắn nhãn 🎭 trước tên khách ảo</label>
+    </div>
+    <div class="row">
+      <label>Nhịp<select id="autoPaceSpeed"><option value="slow">Chậm</option><option value="normal" selected>Vừa</option><option value="fast">Nhanh</option></select></label>
+      <label>Tối đa khách ảo (0–24)<input id="autoPaceMax" type="number" min="0" max="24" step="1" value="8"></label>
+    </div>
+    <div class="hint">Khách ảo chỉ vào phòng, bình luận xin quẻ, thả tim và được gieo quẻ khai lộc 0 KC. Không giả quà, không cộng công đức, không follow. Có người thật hoạt động là tự im 15 giây, chậm lại 90 giây.</div>
     <h2>Bot thiện tín mô phỏng</h2>
     <div class="row">
       <label>Số bot<input id="botN" type="number" min="1" max="64" value="12"></label>
@@ -136,7 +147,7 @@ button.red{background:var(--red);border-color:#d05245}
   <section class="card">
     <h2>3 · Giọng Ông Đồ · Nhạc Thiền · Cảnh</h2>
     <div class="row">
-      <label>Giọng đọc<select id="voice"><option value="google">Google (ổn định · nhanh)</option><option value="vi-VN-NamMinhNeural">Ông Đồ Nam Minh (Edge · trầm ấm)</option><option value="vi-VN-HoaiMyNeural">Hoài My (Edge · nữ)</option></select></label>
+      <label>Giọng đọc<select id="voice"><option value="vi-VN-NamMinhNeural">Ông Đồ Nam Minh (Edge · trầm ấm)</option><option value="vi-VN-HoaiMyNeural">Hoài My (Edge · nữ)</option><option value="google">Google (dự phòng · nhanh)</option></select></label>
       <label>Độ trầm (Hz)<input id="pitch" type="number" step="1" value="-10"></label>
       <label>Tốc độ (%)<input id="rate" type="number" step="1" value="-2"></label>
     </div>
@@ -182,7 +193,7 @@ const $ = id => document.getElementById(id);
 let ws = null;
 const send = (cmd, extra = {}) => ws?.readyState === 1 && ws.send(JSON.stringify({ t: 'ctl', cmd, ...extra }));
 function logLine(s){ const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
-const SETTING_IDS = ['voice', 'pitch', 'rate', 'music', 'musicTrack', 'musicVolume', 'sfx', 'ambience', 'autoToast', 'toastEveryMin', 'title', 'subtitle', 'seatMode', 'autoSeatFollowers', 'phaseMode', 'foodFrom', 'beerFrom'];
+const SETTING_IDS = ['voice', 'pitch', 'rate', 'music', 'musicTrack', 'musicVolume', 'sfx', 'ambience', 'autoToast', 'toastEveryMin', 'title', 'subtitle', 'seatMode', 'autoSeatFollowers', 'phaseMode', 'foodFrom', 'beerFrom', 'autoPace', 'autoPaceSpeed', 'autoPaceMax', 'autoPaceReadings', 'autoPaceLabel'];
 let lastSettings = {};
 function updatePhaseChip(){
   if (!window.BeerScene) return;
@@ -217,7 +228,7 @@ function renderPeople(){
     const tr = document.createElement('tr');
     const a = document.createElement('td'); a.textContent = `${String(i + 1).padStart(2, '0')}  ${p.name} (${p.topic || 'Vận Mệnh'})${p.asked ? ' ✓' : ''}`;
     const b = document.createElement('td'); b.textContent = p.beers ? p.beers + ' KC' : '';
-    if (/^(sim|demo|bot)_/.test(p.id)){ const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.onclick = () => send('kick', { id: p.id }); b.append(x); }
+    if (/^(sim|demo|bot|auto)_/.test(p.id)){ const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.onclick = () => send('kick', { id: p.id }); b.append(x); }
     tr.append(a, b); tb.append(tr);
   });
   $('cnt').textContent = `${people.size} thiện tín`;

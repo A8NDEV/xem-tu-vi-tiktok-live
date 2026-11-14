@@ -126,6 +126,14 @@ Bảng điều khiển có mục **Thời điểm trong đền**: `Tự động 
 
 Hỗ trợ giọng đọc tiếng Việt truyền cảm (Edge Neural TTS `vi-VN-NamMinhNeural` trầm ấm hợp vai Ông Đồ, `vi-VN-HoaiMyNeural`, hoặc Google TTS tốc độ cao). Server tự chia câu dài thành từng đoạn ngắn, thử lại trên kết nối mới và tự động chuyển dự phòng sang Google TTS nếu mạng chặn Edge WebSocket. Các câu đã đọc được lưu đệm trong bộ nhớ để phản hồi tức thì.
 
+Giọng mặc định là Nam Minh, chạy qua gói Python `edge-tts` (`pip install -U edge-tts`) cho ổn định; máy không có Python thì dùng thư viện Node như cũ. Đặt biến môi trường `PYTHON_BIN` nếu `python` không nằm trong PATH.
+
+## Khách ảo giữ nhịp live
+
+Phòng vắng người thì tự có "khách ảo" (nhân vật trong cảnh) vào ngồi chiếu, bình luận xin quẻ, thả tim, rời đi; thỉnh thoảng Ông Đồ gieo quẻ khai lộc **miễn phí** cho họ. Khi có người thật bình luận, follow, tặng quà hoặc thả tim, khách ảo im 15 giây rồi chậm gấp đôi trong 90 giây, và số khách ảo giảm dần theo số người thật đang ngồi. Chỉnh trong `control.html` mục "Khách ảo giữ nhịp live" (bật/tắt, nhịp, số tối đa, gắn nhãn 🎭).
+
+Giới hạn cố ý: khách ảo **không** giả quà, kim cương, công đức hay follow (module `live/auto-pace.mjs` không có hàm nào để làm việc đó). Nên để bật nhãn 🎭 để người xem biết đó là nhân vật trong cảnh. Chạy test: `node --test live/auto-pace.test.mjs`.
+
 ## Nhạc cổ phong & Âm thanh Đền Tử Vi
 
 Nhạc nền đọc từ [`assets/music/library.json`](assets/music/library.json) qua trình phát dùng chung [`assets/audio-player.js`](assets/audio-player.js).
