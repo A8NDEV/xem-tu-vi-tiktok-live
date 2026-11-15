@@ -2,14 +2,15 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { execFile } from 'node:child_process';
+import readline from 'node:readline';
+import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import sharp from 'sharp';
 import { createPacer, SPEEDS } from './auto-pace.mjs';
+import { splitChunks, clipText } from './tts-text.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -411,22 +412,39 @@ function snapshot(){
   };
 }
 
-function pumpQueue(){
+// Mỗi quẻ có giọng đọc riêng, tạo sẵn ngay lúc xếp hàng (voiceOf) để tới lượt là có tiếng liền.
+// Thẻ quẻ chỉ hiện khi tiếng sắp phát và giữ đến hết câu đọc, nên chữ và tiếng luôn khớp nhau.
+const voiceOf = new WeakMap();
+async function pumpQueue(){
   if (activeReading || !readingQueue.length) return;
-  activeReading = readingQueue.shift();
-  const v = viewers.get(activeReading.id);
+  const item = activeReading = readingQueue.shift();
+  const v = viewers.get(item.id);
   if (v) v.asked = true;
-  broadcast({ t: 'reading', activeReading, queue: readingQueue.slice(0, 8) });
+  const sp = voiceOf.get(item);
+  let secs = 0, shownAt = Date.now();
+  try {
+    if (sp){
+      const lead = Math.min(8000, voiceFreeAt - Date.now());   // overlay còn đang đọc câu khác → chờ đúng lúc
+      if (lead > 0) await sleep(lead);
+      await Promise.race([sp.first, sleep(6000)]);             // đoạn đầu sẵn sàng (tối đa 6 giây)
+      if (activeReading !== item) return;                      // phòng đã bị làm trống trong lúc chờ
+    }
+    broadcast({ t: 'reading', activeReading: item, queue: readingQueue.slice(0, 8) });
+    shownAt = Date.now();
+    if (sp) secs = await emitSpeech(sp, { tag: 'reading', id: item.id });
+  } catch (e) { addLog('Đọc quẻ lỗi: ' + (e?.message || e)); }
+  if (activeReading !== item) return;
+  const tierMs = Math.max(7000, Math.min(22000, (item.dur || 18) * 550));
+  const durMs = Math.min(70000, Math.max(tierMs, secs * 1000 + 1500));   // thẻ ở lại tới khi đọc xong
   clearTimeout(readingTimer);
-  const durMs = Math.max(7000, Math.min(22000, (activeReading.dur || 18) * 550));
   readingTimer = setTimeout(() => {
     activeReading = null;
     broadcast({ t: 'reading', activeReading: null, queue: readingQueue.slice(0, 8) });
     setTimeout(pumpQueue, 600);
-  }, durMs);
+  }, Math.max(500, durMs - (Date.now() - shownAt)));
 }
 
-function enqueueReading(v, order, hex){
+function enqueueReading(v, order, hex, voiceText = ''){
   const item = {
     id: v.id,
     name: v.name,
@@ -440,6 +458,7 @@ function enqueueReading(v, order, hex){
     hex,
     at: Date.now(),
   };
+  if (voiceText) voiceOf.set(item, speak(clipText(voiceText, 900)));
   if (readingQueue.length < 20) readingQueue.push(item);
   broadcast({ t: 'queue', queue: readingQueue.slice(0, 8), activeReading });
   pumpQueue();
@@ -555,15 +574,13 @@ function onGift(id, name, giftName, count, diamonds, avatar, followed){
     return;
   }
 
-  enqueueReading(v, order, hex);
+  const line = `Ông Đồ xin gieo quẻ ${order.tierLabel} cho thí chủ ${spoken(v.name)}, tổng công đức ${v.beers} kim cương. ${hex.fullReading}`;
+  enqueueReading(v, order, hex, settings.gifts.readAll || beers >= settings.gifts.minDiamonds ? line : '');
   broadcast({
     t: 'beer', id, name: v.name, giftName, beers, total: v.beers,
     barBeers: totalBeers, tier, kind, card: true, order, hex,
   });
   addLog(`☯ ${v.name} gieo ${order.text} (${beers} KC) → Quẻ số ${hex.num} ${hex.name}`);
-
-  const line = `Ông Đồ xin gieo quẻ ${order.tierLabel} cho thí chủ ${spoken(v.name)}, tổng công đức ${v.beers} kim cương. ${hex.fullReading}`;
-  if (settings.gifts.readAll || beers >= settings.gifts.minDiamonds) say(line, { tag: 'gift', id });
 }
 
 const spoken = s => String(s).replace(/[_@.]+/g, ' ').replace(/[^\p{L}\p{N}\s]/gu, '').trim() || 'thiện tín';
@@ -603,12 +620,21 @@ function rollDiceFor(v, giftName = 'Xin Xâm', base = 0){
 }
 
 const ttsQueue = []; let ttsBusy = false, ttsSeq = 0;
-const TTS_IDLE_MS = 5 * 60_000, TTS_TIMEOUT_MS = 20_000, TTS_RETRY_COOLDOWN_MS = 5000;
-const TTS_CHUNK_CHARS = 150, TTS_EDGE_PAUSE_MS = 30_000, TTS_CACHE_MAX = 200;
+const TTS_IDLE_MS = 5 * 60_000, TTS_TIMEOUT_MS = 20_000;
+const TTS_EDGE_PAUSE_MS = 30_000, TTS_CACHE_MAX = 300;
 const TTS_FAMILY = process.env.TTS_IP_FAMILY === '6' ? 6 : process.env.TTS_IP_FAMILY === '0' ? 0 : 4;
 const ttsAgent = new https.Agent({ keepAlive: true, family: TTS_FAMILY });
-let tts = null, ttsIdleTimer = null, ttsCooldownUntil = 0, ttsEdgeDownUntil = 0;
+let tts = null, ttsIdleTimer = null, ttsEdgeDownUntil = 0;
 const ttsCache = new Map();
+// Bộ nhớ đệm giọng Edge trên đĩa: câu đã đọc một lần thì lần sau (kể cả sau khi mở lại server) có tiếng ngay,
+// vì Edge chậm và hay trả rỗng với câu mới nhưng xong trong ~0,5 giây với câu cũ. Quẻ miễn phí cho khách ảo lúc vắng cũng làm đầy dần kho này.
+const TTS_CACHE_DIR = path.join(__dirname, 'tts-cache'), TTS_DISK_MAX = 1500;
+fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
+try {
+  const files = fs.readdirSync(TTS_CACHE_DIR).map(f => ({ f, t: fs.statSync(path.join(TTS_CACHE_DIR, f)).mtimeMs })).sort((a, b) => a.t - b.t);
+  for (const { f } of files.slice(0, Math.max(0, files.length - TTS_DISK_MAX))) fs.unlinkSync(path.join(TTS_CACHE_DIR, f));
+} catch {}
+const diskFile = key => path.join(TTS_CACHE_DIR, createHash('sha1').update(key).digest('hex') + '.mp3');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const ttsEngine = () => settings.voice === 'google' ? 'google' : 'edge';
 function cacheKey(engine, text){ return `${engine}|${text}`; }
@@ -637,13 +663,15 @@ function scheduleTTSIdle(){
 }
 function esc(s){ return String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c])); }
 function say(text, meta = {}){
-  const s = String(text).trim();
+  const s = clipText(String(text).trim(), 600);
   if (!s) return;
   if (ttsQueue.length >= 15) { addLog('Hàng đợi giọng đọc đầy, bỏ qua 1 câu'); return; }
-  ttsQueue.push({ text: s.slice(0, 500), meta }); pumpTTS();
+  ttsQueue.push({ sp: speak(s), meta }); pumpTTS();   // tạo giọng ngay lúc xếp hàng, tới lượt là có sẵn
 }
+const TOAST_LINE = 'Ông Đồ chúc toàn thể thiện tín trong phòng tâm an vạn sự lành, cầu tài đắc tài, cầu duyên đắc duyên!';
 async function warmTTS(){
-  if (ttsEngine() === 'google' || await findPython()) return;
+  if (ttsEngine() === 'google') return;
+  if (await findPython()){ startWorker(); speak(TOAST_LINE); return; }   // nạp sẵn worker + câu chúc phúc lặp lại
   try {
     await ttsClient().setMetadata(settings.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
     if (!ttsBusy) scheduleTTSIdle();
@@ -651,27 +679,8 @@ async function warmTTS(){
     closeTTS();
   }
 }
-function splitChunks(text, max = TTS_CHUNK_CHARS){
-  const sentences = String(text).replace(/\s+/g, ' ').trim().split(/(?<=[.!?…;:])\s+/u);
-  const chunks = [];
-  let buf = '';
-  for (const sentence of sentences){
-    let s = sentence;
-    while (s.length > max){
-      let cut = s.lastIndexOf(' ', max);
-      if (cut < max * 0.5) cut = max;
-      chunks.push(s.slice(0, cut).trim());
-      s = s.slice(cut).trim();
-    }
-    if (!s) continue;
-    if (!buf) buf = s;
-    else if (buf.length + 1 + s.length <= max) buf += ' ' + s;
-    else { chunks.push(buf); buf = s; }
-  }
-  if (buf) chunks.push(buf);
-  return chunks.length ? chunks : [String(text).slice(0, max)];
-}
-// Giọng Nam Minh qua gói Python edge-tts (giống dự án Thắp Sáng): ổn định hơn thư viện Node, tự thử lại trong một tiến trình.
+// Giọng Nam Minh qua gói Python edge-tts (giống dự án Thắp Sáng). Một worker Python chạy thường trực: nạp edge_tts
+// một lần (~1,1 giây) thay vì mỗi câu một tiến trình, và tự gửi dự phòng song song khi Edge trả rỗng / treo (xem edge_say.py).
 // Máy không có Python + edge-tts → dùng thư viện Node msedge-tts như cũ. Đặt PYTHON_BIN nếu python không nằm trong PATH.
 const SAY_PY = path.join(__dirname, 'edge_say.py');
 let pyBin = null, pyChecked = false;
@@ -685,19 +694,35 @@ async function findPython(){
   addLog('Không thấy Python + edge-tts, dùng thư viện Node (kém ổn định hơn). Cài: pip install -U edge-tts');
   return null;
 }
-let pySeq = 0;
+let pyWorker = null, pyReq = 0;
+const pyPending = new Map();
+function startWorker(){
+  if (pyWorker) return pyWorker;
+  const child = spawn(pyBin, [SAY_PY, '--serve'], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+  const dead = () => {
+    if (pyWorker === child) pyWorker = null;
+    for (const [id, p] of pyPending) if (p.child === child){
+      pyPending.delete(id); clearTimeout(p.timer);
+      p.reject(Object.assign(new Error('worker Python đã dừng'), { workerDied: true }));
+    }
+  };
+  readline.createInterface({ input: child.stdout }).on('line', line => {
+    let m; try { m = JSON.parse(line); } catch { return; }
+    const p = pyPending.get(m.id); if (!p) return;
+    pyPending.delete(m.id); clearTimeout(p.timer);
+    if (m.ok) p.resolve(Buffer.from(m.audio, 'base64')); else p.reject(new Error(String(m.err || 'Edge không trả âm thanh')));
+  });
+  child.stdin.on('error', () => {});
+  child.on('error', dead); child.on('exit', dead);
+  return (pyWorker = child);
+}
 function pyChunk(text){
-  const id = `${process.pid}_${Date.now()}_${++pySeq}`;
-  const src = path.join(os.tmpdir(), `tuvi_${id}.txt`), dst = path.join(os.tmpdir(), `tuvi_${id}.mp3`);
-  fs.writeFileSync(src, text, 'utf8');   // truyền qua file UTF-8 để không lỗi dấu tiếng Việt trên Windows
+  const child = startWorker(), id = ++pyReq;
   const rate = `${settings.rate >= 0 ? '+' : ''}${settings.rate}%`, pitch = `${settings.pitch >= 0 ? '+' : ''}${settings.pitch}Hz`;
   return new Promise((resolve, reject) => {
-    execFile(pyBin, [SAY_PY, settings.voice, rate, pitch, '+0%', src, dst, '6'], { windowsHide: true, timeout: 40_000 }, (err, _o, stderr) => {
-      let buf = null; try { buf = fs.readFileSync(dst); } catch {}
-      for (const f of [src, dst]) { try { fs.unlinkSync(f); } catch {} }
-      if (!err && buf && buf.length >= 1024) resolve(buf);
-      else reject(new Error(String(stderr || err?.message || 'Edge không trả âm thanh').trim().split('\n').pop()));
-    });
+    const timer = setTimeout(() => { pyPending.delete(id); reject(new Error('Edge TTS quá thời gian')); }, 34_000);
+    pyPending.set(id, { resolve, reject, timer, child });
+    child.stdin.write(JSON.stringify({ id, text, voice: settings.voice, rate, pitch, volume: '+0%', tries: 6 }) + '\n');
   });
 }
 async function synthChunk(text){
@@ -716,13 +741,13 @@ async function synthChunkSafe(text){
     try { return await synthChunk(text); }
     catch (e) {
       lastError = e;
+      if (pyBin && !e.workerDied) break;   // worker Python đã tự gửi dự phòng nhiều lần rồi, thử nữa chỉ tốn thời gian
       closeTTS();
       if (attempt < 2) await sleep(400 + Math.random() * 300);
     }
   }
   throw lastError;
 }
-async function edgeChunk(text){ return synthChunkSafe(text); }
 async function googleChunk(text){
   const key = cacheKey('google', text);
   const hit = cacheGet(key); if (hit) return hit;
@@ -750,49 +775,67 @@ async function googleChunk(text){
   }
   throw lastError;
 }
-async function synthAll(chunks, fn){
-  const parts = [];
-  for (const chunk of chunks) parts.push(await fn(chunk));
-  const audio = Buffer.concat(parts);
-  if (!audio.length) throw new Error('không nhận được âm thanh');
-  return audio;
+
+// Tối đa 3 đoạn tạo giọng cùng lúc: nhiều hơn thì Edge dễ từ chối.
+const SYNTH_MAX = 3, synthWait = []; let synthActive = 0;
+const synthSlot = () => synthActive < SYNTH_MAX ? (synthActive++, Promise.resolve()) : new Promise(r => synthWait.push(r));
+const synthFree = () => { const n = synthWait.shift(); if (n) n(); else synthActive--; };
+const BYTES_PER_SEC = { edge: 6000, google: 4000 };   // MP3 48 kbps (Edge 24 kHz) / 32 kbps (Google)
+
+async function edgeAudio(text){
+  const key = cacheKey(`edge|${settings.voice}|${settings.pitch}|${settings.rate}`, text);
+  const hit = cacheGet(key); if (hit) return hit;
+  const file = diskFile(key);
+  try { const buf = fs.readFileSync(file); if (buf.length >= 1024){ cachePut(key, buf); return buf; } } catch {}
+  await synthSlot();
+  try {
+    const audio = await synthChunkSafe(text); cachePut(key, audio);
+    try { fs.writeFileSync(file, audio); } catch {}
+    return audio;
+  }
+  finally { synthFree(); }
 }
-async function synthLine(text){
-  const chunks = splitChunks(text);
-  if (ttsEngine() === 'google'){
-    try { return { audio: await synthAll(chunks, googleChunk), engine: 'google' }; }
+// một đoạn câu → { audio, engine }; Edge hỏng thì dùng Google cho riêng đoạn đó; cả hai hỏng → null (đoạn đó bị bỏ qua)
+async function chunkAudio(text){
+  const order = ttsEngine() === 'google' || Date.now() < ttsEdgeDownUntil ? ['google', 'edge'] : ['edge', 'google'];
+  let last;
+  for (const engine of order){
+    try { return { audio: await (engine === 'google' ? googleChunk : edgeAudio)(text), engine }; }
     catch (e) {
-      addLog(`Google TTS lỗi, chuyển sang Edge: ${e?.message || e}`);
-      return { audio: await synthAll(chunks, edgeChunk), engine: 'edge' };
+      last = e;
+      if (engine === 'edge'){ ttsEdgeDownUntil = Date.now() + TTS_EDGE_PAUSE_MS; addLog(`Edge TTS trục trặc, dùng giọng Google: ${e?.message || e}`); }
     }
   }
-  if (Date.now() < ttsEdgeDownUntil)
-    return { audio: await synthAll(chunks, googleChunk), engine: 'google' };
-  try { return { audio: await synthAll(chunks, edgeChunk), engine: 'edge' }; }
-  catch (e) {
-    ttsEdgeDownUntil = Date.now() + TTS_EDGE_PAUSE_MS;
-    addLog(`Edge TTS trục trặc, dùng giọng Google: ${e?.message || e}`);
-    return { audio: await synthAll(chunks, googleChunk), engine: 'google' };
+  addLog('TTS lỗi: ' + (last?.message || last));
+  return null;
+}
+// Bắt đầu tạo giọng NGAY cho mọi đoạn song song; phát từng đoạn theo thứ tự ngay khi đoạn đó xong (emitSpeech).
+function speak(text){
+  const parts = splitChunks(text).map(c => chunkAudio(c).catch(() => null));
+  return { text, parts, first: parts[0].then(() => {}) };
+}
+let voiceFreeAt = 0;   // ước tính lúc overlay đọc xong mọi thứ đã gửi (để thẻ quẻ khớp với tiếng)
+async function emitSpeech(sp, meta = {}){
+  let secs = 0;
+  for (const part of sp.parts){
+    const r = await part; if (!r) continue;
+    const file = `tts_${Date.now()}_${++ttsSeq}.mp3`;
+    fs.writeFileSync(path.join(TTS_DIR, file), r.audio);
+    broadcast({ t:'tts', url: `/live/tts/${file}`, text: sp.text, rate: r.engine === 'google' ? settings.rate : 0, ...meta });
+    const sec = r.audio.length / BYTES_PER_SEC[r.engine];
+    secs += sec;
+    voiceFreeAt = Math.max(voiceFreeAt, Date.now()) + sec * 1000 + 350;   // overlay nghỉ 350 ms giữa hai đoạn
   }
+  const old = fs.readdirSync(TTS_DIR).sort(); while (old.length > 40) { try { fs.unlinkSync(path.join(TTS_DIR, old.shift())); } catch {} }
+  return secs;
 }
 async function pumpTTS(){
   if (ttsBusy || !ttsQueue.length) return;
-  const wait = ttsCooldownUntil - Date.now();
-  if (wait > 0){ setTimeout(pumpTTS, wait); return; }
   ttsBusy = true;
-  const { text, meta } = ttsQueue.shift();
-  try {
-    const { audio, engine } = await synthLine(text);
-    const file = `tts_${Date.now()}_${++ttsSeq}.mp3`;
-    fs.writeFileSync(path.join(TTS_DIR, file), audio);
-    broadcast({ t:'tts', url: `/live/tts/${file}`, text, rate: engine === 'google' ? settings.rate : 0, ...meta });
-    const old = fs.readdirSync(TTS_DIR).sort(); while (old.length > 40) { try { fs.unlinkSync(path.join(TTS_DIR, old.shift())); } catch {} }
-  } catch (e) {
-    addLog('TTS lỗi: ' + (e?.message || e));
-    ttsCooldownUntil = Date.now() + TTS_RETRY_COOLDOWN_MS;
-  } finally {
-    ttsBusy = false; scheduleTTSIdle(); setTimeout(pumpTTS, 50);
-  }
+  const { sp, meta } = ttsQueue.shift();
+  try { await emitSpeech(sp, meta); }
+  catch (e) { addLog('TTS lỗi: ' + (e?.message || e)); }
+  finally { ttsBusy = false; scheduleTTSIdle(); setTimeout(pumpTTS, 50); }
 }
 
 const TOASTS = [
@@ -804,7 +847,7 @@ let toastTimer = null, toastIdx = 0;
 function groupToast(){
   const [text, sub] = TOASTS[toastIdx++ % TOASTS.length];
   broadcast({ t:'toast', text, sub });
-  say('Ông Đồ chúc toàn thể thiện tín trong phòng tâm an vạn sự lành, cầu tài đắc tài, cầu duyên đắc duyên!', { tag:'toast' });
+  say(TOAST_LINE, { tag:'toast' });
   addLog('☯ Ông Đồ ban lời chúc đại cát');
 }
 function scheduleToast(){ clearInterval(toastTimer); if (settings.autoToast) toastTimer = setInterval(groupToast, Math.max(1, settings.toastEveryMin) * 60_000); }
@@ -874,6 +917,7 @@ async function connectTikTok(uniqueId){
       tiktok = conn;
       tiktokState = { status: 'connected', uniqueId, error: '', roomId: roomId || '' };
       addLog(`✅ Đã kết nối live @${uniqueId}`);
+      purgeDemo();
     } catch (e) {
       if (!alive()) return;
       tiktokState = { status: 'error', uniqueId, error: String(e?.message || e) };
@@ -906,6 +950,16 @@ function fillDemo(n){
     }
   }
   broadcast(snapshot());
+}
+// Vào live thật: dọn hết người mẫu / bot (kèm KC giả của họ) để số liệu trên màn hình chỉ còn của người thật.
+function purgeDemo(){
+  setBots(false);
+  const fake = [...viewers.values()].filter(v => /^(bot|demo)_/.test(v.id));
+  if (!fake.length) return;
+  for (const v of fake){ totalBeers = Math.max(0, totalBeers - v.beers); viewers.delete(v.id); }
+  for (let i = readingQueue.length - 1; i >= 0; i--) if (/^(bot|demo)_/.test(readingQueue[i].id)) readingQueue.splice(i, 1);
+  broadcast(snapshot());
+  addLog(`Đã dọn ${fake.length} người mẫu / bot khi vào live thật`);
 }
 function clearSeats(){
   viewers.clear();
@@ -949,7 +1003,9 @@ function onControl(m){
       broadcast({ t:'cheer', id: v.id, name: v.name });
       addLog(`🙏 ${v.name} chắp tay cầu an`); break;
     }
-    case 'fill': fillDemo(clamp(m.n, 1, 64)); addLog(`Đổ người mẫu: ${viewers.size} người`); break;
+    case 'fill':
+      if (tiktokState.status === 'connected'){ addLog('⛔ Đang kết nối live thật: không đổ người mẫu (có KC giả). Ngắt TikTok trước nếu muốn thử.'); break; }
+      fillDemo(clamp(m.n, 1, 64)); addLog(`Đổ người mẫu: ${viewers.size} người`); break;
     case 'clear': clearSeats(); break;
     case 'kick': {
       const id = String(m.id || '').slice(0, 64), v = viewers.get(id);
@@ -959,11 +1015,20 @@ function onControl(m){
     }
     case 'toast': groupToast(); break;
     case 'say': if (m.text) say(String(m.text).slice(0, 400), { tag:'say' }); break;
-    case 'settings':
+    case 'settings': {
+      const voiceKey = () => `${settings.voice}|${settings.pitch}|${settings.rate}`, before = voiceKey();
       applySettings(m.settings || {});
       if (!settings.autoPace) pacer.clearAll();
+      if (voiceKey() !== before && ttsEngine() === 'edge') speak(TOAST_LINE);   // tạo sẵn câu chúc phúc với giọng mới
+      saveSettings();
       scheduleToast(); broadcast({ t:'settings', settings, cap: capacity(), barBeers: totalBeers }); break;
-    case 'bots': setBots(!!m.on, +m.n || 12, m.pace); break;
+    }
+    case 'bots':
+      if (m.on && tiktokState.status === 'connected'){
+        addLog('⛔ Đang kết nối live thật: không bật bot (bot có tặng quà giả). Dùng "Khách ảo giữ nhịp live" thay thế.');
+        broadcast({ t:'bots', on:false }, 'control'); break;
+      }
+      setBots(!!m.on, +m.n || 12, m.pace); break;
   }
 }
 
@@ -986,14 +1051,26 @@ function applySettings(o){
   for (const [k, fn] of Object.entries(SETTING_RULES)) if (k in o) settings[k] = fn(o[k]);
   if (settings.beerFrom <= settings.foodFrom + 1){ settings.foodFrom = 6; settings.beerFrom = 18; }
 }
+// Cài đặt (giọng, khách ảo, nhạc, tên phòng…) được lưu vào live/settings.json và nạp lại khi mở server.
+// Chỉ nhận đúng các khóa trong SETTING_RULES, qua cùng bộ kiểm tra như khi chỉnh trên bảng điều khiển.
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
+let saveTimer = null;
+function saveSettings(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const out = {}; for (const k of Object.keys(SETTING_RULES)) out[k] = settings[k];
+    try { fs.writeFileSync(SETTINGS_FILE + '.tmp', JSON.stringify(out, null, 2)); fs.renameSync(SETTINGS_FILE + '.tmp', SETTINGS_FILE); }
+    catch (e) { addLog('Không lưu được cài đặt: ' + (e?.message || e)); }
+  }, 600);
+}
+try { applySettings(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))); scheduleToast(); } catch { /* chưa có file → dùng mặc định */ }
 
 // Ông Đồ gieo quẻ khai lộc MIỄN PHÍ cho khách ảo: 0 KC, không cộng công đức / tổng bar, không phát sự kiện quà.
 function freeReading(v){
   const hex = buildHexagram(v.topicId || 'tong_quan', 'khai_loc');
   v.asked = true;
-  enqueueReading(v, { ...orderFromCoins(1, v.topic), coins: 0 }, hex);
+  enqueueReading(v, { ...orderFromCoins(1, v.topic), coins: 0 }, hex, `Ông Đồ xin gieo quẻ khai lộc cho thí chủ ${spoken(v.name)}. ${hex.fullReading}`);
   addLog(`🎭 Ông Đồ gieo quẻ khai lộc cho khách ảo ${v.name} → Quẻ số ${hex.num} ${hex.name}`);
-  say(`Ông Đồ xin gieo quẻ khai lộc cho thí chủ ${spoken(v.name)}. ${hex.fullReading}`, { tag: 'auto', id: v.id });
 }
 const pacer = createPacer({
   getSettings: () => settings, viewers, seat, onChat, broadcast, addLog,

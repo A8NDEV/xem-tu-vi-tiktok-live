@@ -128,6 +128,16 @@ Hỗ trợ giọng đọc tiếng Việt truyền cảm (Edge Neural TTS `vi-VN-
 
 Giọng mặc định là Nam Minh, chạy qua gói Python `edge-tts` (`pip install -U edge-tts`) cho ổn định; máy không có Python thì dùng thư viện Node như cũ. Đặt biến môi trường `PYTHON_BIN` nếu `python` không nằm trong PATH.
 
+Cách giữ live mượt (Edge chậm và hay trả rỗng với câu mới, nhưng xong trong ~0,5 giây với câu đã đọc):
+- Một worker Python chạy thường trực (`live/edge_say.py --serve`), nạp thư viện một lần; khi Edge trả rỗng / treo thì tự gửi dự phòng song song.
+- Câu được chia đoạn ngắn và tạo giọng song song ngay lúc xếp hàng; phát từng đoạn ngay khi xong. Câu đầu (chứa tên người) đứng riêng, các đoạn luận quẻ lặp lại nên dùng lại từ bộ nhớ đệm.
+- Bộ nhớ đệm giọng lưu trên đĩa (`live/tts-cache/`, tối đa 1500 file), nên càng dùng lâu càng nhanh, kể cả sau khi mở lại server. Quẻ miễn phí của khách ảo lúc vắng cũng làm đầy dần kho này.
+- Thẻ quẻ chỉ hiện khi tiếng sắp phát và ở lại đến hết câu đọc, nên chữ và tiếng luôn khớp nhau.
+- Cài đặt (giọng, khách ảo, nhạc, tên phòng…) lưu ở `live/settings.json` và nạp lại khi mở server.
+- Đang kết nối TikTok thật thì nút "Đổ người mẫu" và "Bật bot" bị khóa (bot có tặng quà giả); vào live thật là server tự dọn bot và người mẫu.
+
+Chạy toàn bộ test: `cd live && npm test`.
+
 ## Khách ảo giữ nhịp live
 
 Phòng vắng người thì tự có "khách ảo" (nhân vật trong cảnh) vào ngồi chiếu, bình luận xin quẻ, thả tim, rời đi; thỉnh thoảng Ông Đồ gieo quẻ khai lộc **miễn phí** cho họ. Khi có người thật bình luận, follow, tặng quà hoặc thả tim, khách ảo im 15 giây rồi chậm gấp đôi trong 90 giây, và số khách ảo giảm dần theo số người thật đang ngồi. Chỉnh trong `control.html` mục "Khách ảo giữ nhịp live" (bật/tắt, nhịp, số tối đa, gắn nhãn 🎭).

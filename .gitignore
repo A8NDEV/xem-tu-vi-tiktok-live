@@ -6,3 +6,8 @@ live/avatar-cache/
 .env.*
 .DS_Store
 Thumbs.db
+
+live/settings.json
+live/settings.json.tmp
+live/tts-cache/
+__pycache__/
