@@ -106,11 +106,12 @@ window.BeerScene = (function(){
   function activityKey(skin){ return skin; }
 
   const MENU = [
-    { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   maxCoins: 9,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '1–9 KC · 18s · Luận nên hay chưa nên' },
-    { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  maxCoins: 29,  dur: 25, unit: 'quẻ sâu',      icon: '📜', desc: '10–29 KC · 25s · Luận tượng quẻ & hào động' },
-    { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 30,  maxCoins: 69,  dur: 35, unit: 'quẻ chi tiết', icon: '🔮', desc: '30–69 KC · 35s · Thời điểm thuận lợi' },
-    { id: 'long_phuong', label: 'Long Phượng', coins: 70,  maxCoins: 149, dur: 48, unit: 'đại quẻ',      icon: '🐉', desc: '70–149 KC · 48s · Quý nhân, hướng & màu hợp' },
-    { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 150, maxCoins: 9999,dur: 65, unit: 'thiên mệnh',   icon: '👑', desc: '150+ KC · 65s · Luận trọn vẹn đại cát' },
+    { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   maxCoins: 4,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '1–4 KC · 18s · Luận nên hay chưa nên' },
+    { id: 'cat_tuong',   label: 'Cát Tường',   coins: 5,   maxCoins: 9,   dur: 22, unit: 'quẻ may',      icon: '🌸', desc: '5–9 KC · 22s · Hanh thông may mắn' },
+    { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  maxCoins: 19,  dur: 26, unit: 'quẻ sâu',      icon: '📜', desc: '10–19 KC · 26s · Luận tượng quẻ & hào động' },
+    { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 20,  maxCoins: 29,  dur: 32, unit: 'quẻ chi tiết', icon: '🔮', desc: '20–29 KC · 32s · Thời điểm thuận lợi' },
+    { id: 'long_phuong', label: 'Long Phượng', coins: 30,  maxCoins: 99,  dur: 42, unit: 'đại quẻ',      icon: '🐉', desc: '30–99 KC · 42s · Quý nhân, hướng & màu hợp' },
+    { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 100, maxCoins: 9999,dur: 55, unit: 'thiên mệnh',   icon: '👑', desc: '100+ KC · 55s · Luận trọn vẹn đại cát' },
   ];
 
   const TOPICS = [
@@ -137,10 +138,11 @@ window.BeerScene = (function(){
 
   function tierFromCoins(coins){
     const n = Math.max(1, Math.floor(coins || 1));
-    if (n >= 150) return MENU[4];
-    if (n >= 70) return MENU[3];
-    if (n >= 30) return MENU[2];
-    if (n >= 10) return MENU[1];
+    if (n >= 100) return MENU[5];
+    if (n >= 30) return MENU[4];
+    if (n >= 20) return MENU[3];
+    if (n >= 10) return MENU[2];
+    if (n >= 5) return MENU[1];
     return MENU[0];
   }
 

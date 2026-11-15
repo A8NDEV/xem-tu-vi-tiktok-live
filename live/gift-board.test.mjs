@@ -6,7 +6,14 @@ import { loadGiftCatalog, parseGiftIds, buildMenu, diceGift, catalogList, DEFAUL
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const catalog = loadGiftCatalog(path.join(here, 'qua-tiktok.json'));
-const MENU = [{ id: 'a', coins: 1 }, { id: 'b', coins: 10 }, { id: 'c', coins: 30 }, { id: 'd', coins: 70 }, { id: 'e', coins: 150 }];
+const MENU = [
+  { id: 'khai_loc', coins: 1 },
+  { id: 'cat_tuong', coins: 5 },
+  { id: 'phuc_loc', coins: 10 },
+  { id: 'thien_loc', coins: 20 },
+  { id: 'long_phuong', coins: 30 },
+  { id: 'thien_menh', coins: 100 },
+];
 
 test('đọc được danh sách quà TikTok kèm giá và hình https', () => {
   assert.ok(catalog.size > 100);

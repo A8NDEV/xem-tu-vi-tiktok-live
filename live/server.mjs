@@ -1,3 +1,10 @@
+// Tương thích các bản Node chưa có zlib.createZstdDecompress (như Node 23.0-23.7, 22.0-22.14)
+// giúp undici (thư viện piratetok-live-js dùng) không bị lỗi "Cannot read properties of undefined (reading 'bind')"
+import zlib from 'node:zlib';
+if (!zlib.createZstdDecompress) zlib.createZstdDecompress = () => {};
+if (!zlib.constants) zlib.constants = {};
+if (typeof zlib.constants.ZSTD_d_windowLogMax === 'undefined') zlib.constants.ZSTD_d_windowLogMax = 0;
+
 import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
@@ -184,11 +191,12 @@ function skinFromText(t, current){
 const DEFAULT_SKINS = ['man', 'woman', 'cap', 'sexy', 'uncle', 'oldwoman'];
 
 const MENU = [
-  { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '1–9 KC · 18s' },
-  { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  dur: 25, unit: 'quẻ sâu',      icon: '📜', desc: '10–29 KC · 25s' },
-  { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 30,  dur: 35, unit: 'quẻ chi tiết', icon: '🔮', desc: '30–69 KC · 35s' },
-  { id: 'long_phuong', label: 'Long Phượng', coins: 70,  dur: 48, unit: 'đại quẻ',      icon: '🐉', desc: '70–149 KC · 48s' },
-  { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 150, dur: 65, unit: 'thiên mệnh',   icon: '👑', desc: '150+ KC · 65s' },
+  { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '1–4 KC · 18s' },
+  { id: 'cat_tuong',   label: 'Cát Tường',   coins: 5,   dur: 22, unit: 'quẻ may',      icon: '🌸', desc: '5–9 KC · 22s' },
+  { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  dur: 26, unit: 'quẻ sâu',      icon: '📜', desc: '10–19 KC · 26s' },
+  { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 20,  dur: 32, unit: 'quẻ chi tiết', icon: '🔮', desc: '20–29 KC · 32s' },
+  { id: 'long_phuong', label: 'Long Phượng', coins: 30,  dur: 42, unit: 'đại quẻ',      icon: '🐉', desc: '30–99 KC · 42s' },
+  { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 100, dur: 55, unit: 'thiên mệnh',   icon: '👑', desc: '100+ KC · 55s' },
 ];
 
 const TOPICS = [
@@ -338,10 +346,11 @@ function topicFromText(raw){
 
 function tierFromCoins(coins){
   const n = Math.max(1, Math.floor(coins || 1));
-  if (n >= 150) return MENU[4];
-  if (n >= 70) return MENU[3];
-  if (n >= 30) return MENU[2];
-  if (n >= 10) return MENU[1];
+  if (n >= 100) return MENU[5];
+  if (n >= 30) return MENU[4];
+  if (n >= 20) return MENU[3];
+  if (n >= 10) return MENU[2];
+  if (n >= 5) return MENU[1];
   return MENU[0];
 }
 
@@ -573,7 +582,7 @@ function onGift(id, name, giftName, count, diamonds, avatar, followed){
   const rose = ROSE_GIFTS.has(key) || key.startsWith('hoa hong');
   const diceGift = DICE_GIFTS.has(key);
   const kind = rose ? 'rose' : beers >= 30 ? 'tower' : 'beer';
-  const tier = beers >= 70 ? 3 : beers >= 10 ? 2 : 1;
+  const tier = beers >= 30 ? 3 : beers >= 10 ? 2 : 1;
 
   if (diceGift){
     rollDiceFor(v, giftName, 0);
@@ -850,7 +859,7 @@ function staticSentences(){
   for (const t of MENU) add(`Ông Đồ xin gieo quẻ ${t.label}.`);
   add('Ông Đồ xin gieo quẻ Khai Lộc.');
   for (let sum = 3; sum <= 18; sum++) for (const label of ['THƯỢNG THƯỢNG CÁT!', 'ĐẠI CÁT · VƯỢNG LỘC', 'THƯỢNG CÁT · BÌNH AN', 'TRUNG BÌNH · TĨNH TÂM']) add(`Ông Đồ lắc ống xâm, rút được thẻ xâm số ${sum}, quẻ ${label}.`);
-  for (const h of HEXAGRAMS) for (const tp of TOPICS) for (const tier of ['khai_loc', 'phuc_loc', 'thien_loc', 'long_phuong']) for (const moving of tier === 'khai_loc' ? [1] : [1, 2, 3, 4, 5, 6]) add(composeReading(h, tp.id, tier, moving));
+  for (const h of HEXAGRAMS) for (const tp of TOPICS) for (const tier of ['khai_loc', 'cat_tuong', 'phuc_loc', 'thien_loc', 'long_phuong']) for (const moving of tier === 'khai_loc' ? [1] : [1, 2, 3, 4, 5, 6]) add(composeReading(h, tp.id, tier, moving));
   return [...set];
 }
 const prerender = { running: false, total: 0, done: 0, failed: 0, key: '' };
@@ -974,8 +983,15 @@ async function connectTikTok(uniqueId){
       purgeDemo();
     } catch (e) {
       if (!alive()) return;
-      tiktokState = { status: 'error', uniqueId, error: String(e?.message || e) };
-      addLog(`❌ Không kết nối được @${uniqueId}: ${tiktokState.error}`);
+      const rawErr = String(e?.message || e);
+      let friendly = rawErr;
+      if (/not currently live/i.test(rawErr)) {
+        friendly = 'Kênh hiện chưa phát trực tiếp trên TikTok. Hãy bấm "Phát LIVE" trên TikTok trước, rồi bấm Kết nối lại.';
+      } else if (/user not found/i.test(rawErr)) {
+        friendly = 'Không tìm thấy tài khoản TikTok này. Hãy kiểm tra lại username.';
+      }
+      tiktokState = { status: 'error', uniqueId, error: friendly, raw: rawErr };
+      addLog(`❌ Không kết nối được @${uniqueId}: ${friendly}`);
     }
     if (alive()) broadcast({ t:'tiktok', ...tiktokState });
   } finally {
@@ -1159,9 +1175,10 @@ function setBots(on, n, pace){
       const id = ids[Math.floor(Math.random() * ids.length)], v = viewers.get(id), r = Math.random();
       if (r < .54) onChat(id, v.name, BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)]);
       else if (r < .72) broadcast({ t:'like', id, n: 1 + Math.floor(Math.random() * 4) });
-      else if (r < .86) onGift(id, v.name, 'Khai Lộc Tình Duyên', 1, 1 + Math.floor(Math.random() * 8));
-      else if (r < .95) onGift(id, v.name, 'Phúc Lộc Tài Lộc', 1, 15);
-      else onGift(id, v.name, 'Thiên Lộc Đại Cát', 1, 35);
+      else if (r < .82) onGift(id, v.name, 'Khai Lộc Tình Duyên', 1, 1 + Math.floor(Math.random() * 4));
+      else if (r < .90) onGift(id, v.name, 'Cát Tường Như Ý', 1, 5 + Math.floor(Math.random() * 5));
+      else if (r < .96) onGift(id, v.name, 'Phúc Lộc Tài Lộc', 1, 10 + Math.floor(Math.random() * 10));
+      else onGift(id, v.name, 'Thiên Lộc Đại Cát', 1, 20 + Math.floor(Math.random() * 10));
     }, every);
     addLog(`🤖 Bật ${n} bot thiện tín, nhịp ${pace}`);
   } else {

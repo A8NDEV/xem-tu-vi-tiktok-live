@@ -99,24 +99,26 @@ button.red{background:var(--red);border-color:#d05245}
       <button data-skin-word="ông già">Ông già</button>
       <button data-skin-word="bà già">Bà già</button>
     </div>
-    <h2>5 Mốc Gieo Quẻ Kinh Dịch</h2>
+    <h2>6 Mốc Gieo Quẻ Kinh Dịch</h2>
     <table id="menuTable">
       <tbody>
-        <tr><td>🪙 Khai Lộc (Quẻ ngắn · 18s)</td><td>1–9 KC</td></tr>
-        <tr><td>📜 Phúc Lộc (Quẻ sâu · 25s)</td><td>10–29 KC</td></tr>
-        <tr><td>🔮 Thiên Lộc (Quẻ chi tiết · 35s)</td><td>30–69 KC</td></tr>
-        <tr><td>🐉 Long Phượng (Đại quẻ · 48s)</td><td>70–149 KC</td></tr>
-        <tr><td>👑 Thiên Mệnh (Thiên mệnh · 65s)</td><td>150+ KC</td></tr>
+        <tr><td>🪙 Khai Lộc (Quẻ ngắn · 18s)</td><td>1–4 KC</td></tr>
+        <tr><td>🌸 Cát Tường (Quẻ may · 22s)</td><td>5–9 KC</td></tr>
+        <tr><td>📜 Phúc Lộc (Quẻ sâu · 26s)</td><td>10–19 KC</td></tr>
+        <tr><td>🔮 Thiên Lộc (Quẻ chi tiết · 32s)</td><td>20–29 KC</td></tr>
+        <tr><td>🐉 Long Phượng (Đại quẻ · 42s)</td><td>30–99 KC</td></tr>
+        <tr><td>👑 Thiên Mệnh (Thiên mệnh · 55s)</td><td>100+ KC</td></tr>
       </tbody>
     </table>
     <div class="row">
       <button data-gift="Khai Lộc" data-dia="1">🪙 Khai Lộc · 1 KC</button>
-      <button data-gift="Phúc Lộc" data-dia="15">📜 Phúc Lộc · 15 KC</button>
-      <button data-gift="Thiên Lộc" data-dia="35">🔮 Thiên Lộc · 35 KC</button>
+      <button data-gift="Cát Tường" data-dia="5">🌸 Cát Tường · 5 KC</button>
+      <button data-gift="Phúc Lộc" data-dia="10">📜 Phúc Lộc · 10 KC</button>
     </div>
     <div class="row">
-      <button data-gift="Long Phượng" data-dia="80">🐉 Long Phượng · 80 KC</button>
-      <button data-gift="Thiên Mệnh" data-dia="180">👑 Thiên Mệnh · 180 KC</button>
+      <button data-gift="Thiên Lộc" data-dia="20">🔮 Thiên Lộc · 20 KC</button>
+      <button data-gift="Long Phượng" data-dia="30">🐉 Long Phượng · 30 KC</button>
+      <button data-gift="Thiên Mệnh" data-dia="100">👑 Thiên Mệnh · 100 KC</button>
       <button data-dice="1">🎋 Lắc Ống Xâm</button>
     </div>
     <div class="row"><button class="gold" id="btnToast">☯ Ban lời chúc Đại Cát</button><button class="gold" id="btnDice">🎋 Thử lắc ống xâm</button></div>
@@ -257,7 +259,17 @@ function renderPeople(){
 }
 function setTT(st){
   const el = $('tt'); el.className = 'chip ' + (st.status === 'connected' ? 'ok' : st.status === 'error' ? 'bad' : '');
-  el.textContent = st.status === 'connected' ? `TikTok: @${st.uniqueId} ✓` : st.status === 'connecting' ? `TikTok: đang kết nối @${st.uniqueId}…` : st.status === 'error' ? 'TikTok: lỗi kết nối' : 'TikTok: chưa kết nối';
+  let txt = 'TikTok: chưa kết nối';
+  if (st.status === 'connected') txt = `TikTok: @${st.uniqueId} ✓`;
+  else if (st.status === 'connecting') txt = `TikTok: đang kết nối @${st.uniqueId}…`;
+  else if (st.status === 'error') {
+    const err = String(st.error || '');
+    if (/chưa phát trực tiếp|not currently live/i.test(err)) txt = `TikTok: @${st.uniqueId} chưa bật LIVE`;
+    else if (/không tìm thấy|user not found/i.test(err)) txt = `TikTok: không tìm thấy @${st.uniqueId}`;
+    else txt = 'TikTok: lỗi kết nối';
+  }
+  el.textContent = txt;
+  if (st.error) el.title = st.error;
 }
 function connect(){
   ws = new WebSocket(`ws://${location.host}/ws?role=control`);

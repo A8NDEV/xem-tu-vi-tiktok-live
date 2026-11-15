@@ -138,7 +138,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:var(-
 
   <div id="rightCol" class="ui">
     <div id="menu" class="card">
-      <h3>✿ 5 Mốc Gieo Quẻ ✿</h3>
+      <h3>✿ 6 Mốc Gieo Quẻ ✿</h3>
       <div id="menuRows"></div>
     </div>
     <div id="hexBox" class="card">
@@ -367,7 +367,7 @@ setInterval(() => {
   document.getElementById('timer').textContent = [s / 3600, s / 60 % 60, s % 60].map(x => String(Math.floor(x)).padStart(2, '0')).join(':');
 }, 1000);
 
-const SAMPLE_CMDS = ['Khai Lộc Tình Duyên', 'Phúc Lộc Tài Lộc', 'Thiên Lộc Sự Nghiệp', 'Khai Lộc Gia Đạo', 'Long Phượng Vận Mệnh'];
+const SAMPLE_CMDS = ['Khai Lộc Tình Duyên', 'Cát Tường Bình An', 'Phúc Lộc Tài Lộc', 'Thiên Lộc Sự Nghiệp', 'Long Phượng Vận Mệnh', 'Thiên Mệnh Đại Cát'];
 let cmdIdx = 0;
 setInterval(() => {
   document.getElementById('sampleCmd').textContent = SAMPLE_CMDS[++cmdIdx % SAMPLE_CMDS.length];

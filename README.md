@@ -1,6 +1,6 @@
 # Tử Vi Phát Đạt — BEAR DEV
 
-Đền Tử Vi & Gieo Quẻ Kinh Dịch 2.5D cho TikTok LIVE. Người xem bình luận hoặc theo dõi là bước vào đền, ngồi trên thảm đỏ chờ tới lượt tiến lên chiếu trước mặt **Ông Đồ** xin quẻ. Quà tặng được tính bằng **Kim Cương (KC)** (1 KC = 1 xu) và quy ra **5 Mốc Gieo Quẻ** theo chủ đề (*Tình Duyên, Tài Lộc, Sự Nghiệp, Gia Đạo, Sức Khỏe, Vận Mệnh*). Đền có vòng **Bát Quái & 12 Con Giáp** xoay phát sáng, Ông Đồ 4 tư thế (vuốt râu, lắc ống xâm, tung 3 đồng xu cổ Càn Long Thông Bảo trên mâm đồng, mở cuộn chiếu chỉ đọc lời phán), bảng **Quẻ Kinh Dịch Lục Hào**, giọng đọc Ông Đồ luận giải và bảng **Top Công Đức** cập nhật liên tục.
+Đền Tử Vi & Gieo Quẻ Kinh Dịch 2.5D cho TikTok LIVE. Người xem bình luận hoặc theo dõi là bước vào đền, ngồi trên thảm đỏ chờ tới lượt tiến lên chiếu trước mặt **Ông Đồ** xin quẻ. Quà tặng được tính bằng **Kim Cương (KC)** (1 KC = 1 xu) và quy ra **6 Mốc Gieo Quẻ** theo chủ đề (*Tình Duyên, Tài Lộc, Sự Nghiệp, Gia Đạo, Sức Khỏe, Vận Mệnh*). Đền có vòng **Bát Quái & 12 Con Giáp** xoay phát sáng, Ông Đồ 4 tư thế (vuốt râu, lắc ống xâm, tung 3 đồng xu cổ Càn Long Thông Bảo trên mâm đồng, mở cuộn chiếu chỉ đọc lời phán), bảng **Quẻ Kinh Dịch Lục Hào**, giọng đọc Ông Đồ luận giải và bảng **Top Công Đức** cập nhật liên tục.
 
 Đây là dự án do **BEAR DEV** phát triển và duy trì, phát triển trên nền kiến trúc TikTok LIVE 2.5D cùng hệ sinh thái với [Chánh Điện Tịnh Tâm · Bear](https://github.com/khanhdevngu/chanh-dien-online-bear) và [City Beer Station — BEAR DEV](https://github.com/khanhdevngu/dinhauonline). Dự án giữ giấy phép MIT và ghi nhận đầy đủ bản quyền mã nguồn.
 
@@ -61,17 +61,18 @@ Chưa live vẫn thử được: dùng **Thử tương tác**, **5 nút Gieo Qu�
 - **Top Công Đức** hiện 5 tín chủ gieo duyên nhiều nhất.
 - Định kỳ mỗi 3 phút Ông Đồ tự động gieo một quẻ chung chúc phúc cho toàn bộ khán giả trong phòng LIVE (đổi được trong bảng điều khiển).
 
-## 5 Mốc Gieo Quẻ & 6 Chủ Đề Luận Giải
+## 6 Mốc Gieo Quẻ & 6 Chủ Đề Luận Giải
 
-Giá trị quà tính bằng **KC** (1 KC = 1 coin/diamond). Mỗi lần tặng quà hoặc bình luận xin quẻ, hệ thống đối chiếu theo bảng **5 Mốc Gieo Quẻ**:
+Giá trị quà tính bằng **KC** (1 KC = 1 coin/diamond). Mỗi lần tặng quà hoặc bình luận xin quẻ, hệ thống đối chiếu theo bảng **6 Mốc Gieo Quẻ**:
 
-| Mốc Quẻ | Định mức KC | Thời lượng | Nội dung luận giải |
-|---|---|---|---|
-| 🪙 **Khai Lộc** | 1–9 KC | 18s | Luận nhanh việc bạn hỏi nên hay chưa nên, điểm cát hung chính |
-| 📜 **Phúc Lộc** | 10–29 KC | 25s | Phân tích theo hình tượng quẻ Kinh Dịch, hào động và lời khuyên |
-| ☯️ **Thiên Lộc** | 30–69 KC | 35s | Luận sâu vận hạn, thời điểm thuận lợi và quý nhân phù trợ |
-| 🐉 **Long Phượng** | 70–149 KC | 48s | Luận chi tiết cung mệnh, hướng hợp, màu sắc và hóa giải xung khắc |
-| 👑 **Thiên Mệnh** | 150+ KC | 65s | Đại quẻ toàn diện: thiên thời, địa lợi, nhân hòa, đại vận cả năm |
+| Mốc Quẻ | Định mức KC | Thời lượng | Quà gợi ý | Nội dung luận giải |
+|---|---|---|---|---|
+| 🪙 **Khai Lộc** | 1–4 KC | 18s | Hoa hồng (1 xu) | Luận nhanh việc bạn hỏi nên hay chưa nên, điểm cát hung chính |
+| 🌸 **Cát Tường** | 5–9 KC | 22s | Bắn tim (5 xu) | Luận hanh thông, biến sang quẻ và lời khuyên định hướng |
+| 📜 **Phúc Lộc** | 10–19 KC | 26s | Heo may mắn (10 xu) | Phân tích tượng quẻ Kinh Dịch, hào động và lời khuyên sâu sắc |
+| 🔮 **Thiên Lộc** | 20–29 KC | 32s | Nước hoa (20 xu) | Luận chi tiết hào động, lời khuyên và thời điểm thuận lợi |
+| 🐉 **Long Phượng** | 30–99 KC | 42s | Bánh vòng / Bó hoa (30 xu) | Đại quẻ chi tiết: thời vận, quý nhân phù trợ, hướng & màu sắc may mắn |
+| 👑 **Thiên Mệnh** | 100+ KC | 55s | Thả tim (100 xu) | Thiên mệnh toàn diện: thiên thời, địa lợi, nhân hòa, đại vận cả năm |
 
 ### 6 Chủ Đề Xin Quẻ
 

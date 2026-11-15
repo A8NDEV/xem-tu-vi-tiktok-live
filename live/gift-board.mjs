@@ -1,11 +1,11 @@
-// Bảng quà TikTok gợi ý hiện trên overlay: ghép quà thật (tên, giá xu, hình) vào 5 mốc gieo quẻ.
+// Bảng quà TikTok gợi ý hiện trên overlay: ghép quà thật (tên, giá xu, hình) vào 6 mốc gieo quẻ.
 // Dữ liệu quà lấy từ live/qua-tiktok.json (danh sách công khai của TikTok, cùng nguồn với dự án Thắp Sáng).
 // Module thuần (chỉ đọc một file JSON), có test: gift-board.test.mjs.
 import fs from 'node:fs';
 
-// Quà mặc định, chọn hợp chủ đề: Hoa hồng, Bắn tim (Khai Lộc) · Chú heo may mắn, Nước hoa (Phúc Lộc) · Bánh vòng, Bó hoa (Thiên Lộc)
-// · Hạc giấy, Thả tim (Long Phượng) · Chó Corgi, Tim (Thiên Mệnh).
-export const DEFAULT_GIFT_IDS = ['5655', '5487', '8825', '5658', '5879', '5780', '5659', '5660', '6267', '5586'];
+// Quà mặc định, chọn hợp chủ đề: Hoa hồng (Khai Lộc · 1 xu) · Bắn tim (Cát Tường · 5 xu) · Chú heo may mắn (Phúc Lộc · 10 xu)
+// · Nước hoa (Thiên Lộc · 20 xu) · Bánh vòng, Bó hoa (Long Phượng · 30 xu) · Thả tim (Thiên Mệnh · 100 xu).
+export const DEFAULT_GIFT_IDS = ['5655', '5487', '8825', '5658', '5879', '5660', '5780', '5659', '6267', '5586'];
 export const DICE_GIFT_ID = '9875';   // Cỏ bốn lá: server đọc là "lắc ống xâm", không phải quẻ theo mốc
 const IMG_RE = /^https:\/\/[^\s"'<>]+$/;
 
