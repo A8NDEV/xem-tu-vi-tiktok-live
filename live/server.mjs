@@ -11,6 +11,7 @@ import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import sharp from 'sharp';
 import { createPacer, SPEEDS } from './auto-pace.mjs';
 import { splitChunks, clipText } from './tts-text.mjs';
+import { loadGiftCatalog, parseGiftIds, buildMenu, diceGift, catalogList, DEFAULT_GIFT_IDS } from './gift-board.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -38,7 +39,10 @@ const settings = {
   gifts: { readAll: true, minDiamonds: 1 },
   // khách ảo giữ nhịp (xem auto-pace.mjs): không giả quà / KC / follow, tự nhường sóng khi có người thật
   autoPace: true, autoPaceSpeed: 'normal', autoPaceMax: 8, autoPaceReadings: true, autoPaceLabel: true,
+  giftBoard: DEFAULT_GIFT_IDS.join(','),   // mã quà TikTok gợi ý trên bảng mốc (xem gift-board.mjs)
 };
+const giftCatalog = loadGiftCatalog(path.join(__dirname, 'qua-tiktok.json'));
+const menuMsg = () => ({ menu: buildMenu(MENU, giftCatalog, parseGiftIds(settings.giftBoard)), dice: diceGift(giftCatalog) });
 
 const viewers = new Map();
 const startedAt = Date.now();
@@ -408,7 +412,7 @@ function snapshot(){
   return {
     t: 'state', settings, viewers: [...viewers.values()].map(pub),
     cap: capacity(), startedAt, tiktok: tiktokState, barBeers: totalBeers,
-    menu: MENU, queue: readingQueue.slice(0, 8), activeReading,
+    ...menuMsg(), queue: readingQueue.slice(0, 8), activeReading,
   };
 }
 
@@ -1071,8 +1075,10 @@ function onControl(m){
       if (!settings.autoPace) pacer.clearAll();
       if (voiceKey() !== before && ttsEngine() === 'edge') prerenderVoice();   // giọng / độ trầm mới → tạo sẵn lại kho câu cố định
       saveSettings();
-      scheduleToast(); broadcast({ t:'settings', settings, cap: capacity(), barBeers: totalBeers }); break;
+      scheduleToast(); broadcast({ t:'settings', settings, cap: capacity(), barBeers: totalBeers });
+      broadcast({ t:'menu', ...menuMsg() }); break;
     }
+    case 'catalog': broadcast({ t:'catalog', gifts: catalogList(giftCatalog) }, 'control'); break;
     case 'bots':
       if (m.on && tiktokState.status === 'connected'){
         addLog('⛔ Đang kết nối live thật: không bật bot (bot có tặng quà giả). Dùng "Khách ảo giữ nhịp live" thay thế.');
@@ -1095,6 +1101,7 @@ const SETTING_RULES = {
   autoPace: Boolean, autoPaceReadings: Boolean, autoPaceLabel: Boolean,
   autoPaceSpeed: v => SPEEDS.includes(v) ? v : settings.autoPaceSpeed,
   autoPaceMax: v => clamp(v, 0, 24),
+  giftBoard: v => parseGiftIds(v).join(','),
 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(+v || 0)));
 function applySettings(o){

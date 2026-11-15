@@ -125,6 +125,11 @@ button.red{background:var(--red);border-color:#d05245}
     <h2>Đổ người mẫu</h2>
     <div class="row"><button data-fill="12">12</button><button data-fill="24">24</button><button data-fill="36">36</button><button data-fill="48">48</button><button data-fill="64">64</button></div>
     <button class="red" id="btnClear">Làm trống phòng</button>
+    <h2>🎁 Bảng quà TikTok gợi ý (hiện trên màn hình)</h2>
+    <label>Mã quà đang hiện (tối đa 12; mỗi mốc hiện 1 quà đầu tiên có giá đúng khoảng của mốc)<input id="giftBoard" type="text" value=""></label>
+    <label>Tìm quà để thêm<input id="giftSearch" type="search" placeholder="gõ tên: hoa hồng, tim, heo, nước hoa…" autocomplete="off"></label>
+    <div id="giftResults" class="row tight"></div>
+    <div class="hint">Mỗi mốc lấy quà có giá đúng khoảng của mốc đó. Bấm một quà để thêm vào danh sách; xóa bớt mã trong ô trên rồi bấm ra ngoài để lưu.</div>
     <h2>🎭 Khách ảo giữ nhịp live</h2>
     <div class="row tight">
       <label class="check"><input type="checkbox" id="autoPace" checked> Bật khách ảo tự động</label>
@@ -193,7 +198,7 @@ const $ = id => document.getElementById(id);
 let ws = null;
 const send = (cmd, extra = {}) => ws?.readyState === 1 && ws.send(JSON.stringify({ t: 'ctl', cmd, ...extra }));
 function logLine(s){ const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
-const SETTING_IDS = ['voice', 'pitch', 'rate', 'music', 'musicTrack', 'musicVolume', 'sfx', 'ambience', 'autoToast', 'toastEveryMin', 'title', 'subtitle', 'seatMode', 'autoSeatFollowers', 'phaseMode', 'foodFrom', 'beerFrom', 'autoPace', 'autoPaceSpeed', 'autoPaceMax', 'autoPaceReadings', 'autoPaceLabel'];
+const SETTING_IDS = ['voice', 'pitch', 'rate', 'music', 'musicTrack', 'musicVolume', 'sfx', 'ambience', 'autoToast', 'toastEveryMin', 'title', 'subtitle', 'seatMode', 'autoSeatFollowers', 'phaseMode', 'foodFrom', 'beerFrom', 'autoPace', 'autoPaceSpeed', 'autoPaceMax', 'autoPaceReadings', 'autoPaceLabel', 'giftBoard'];
 let lastSettings = {};
 function updatePhaseChip(){
   if (!window.BeerScene) return;
@@ -216,6 +221,22 @@ function fillSettings(s){
   updatePhaseChip();
 }
 function readSettings(){ const o = {}; for (const k of SETTING_IDS){ const el = $(k); o[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value; } return o; }
+let giftCatalog = [];
+const noDiacritics = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
+function renderGiftResults(){
+  const q = noDiacritics($('giftSearch').value.trim()), box = $('giftResults'); box.replaceChildren();
+  if (!q) return;
+  for (const [id, name, coins] of giftCatalog.filter(g => noDiacritics(g[1]).includes(q)).slice(0, 10)){
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = `${name} · ${coins} xu`;
+    b.onclick = () => {
+      const ids = $('giftBoard').value.split(/[\s,;]+/).filter(Boolean);
+      if (!ids.includes(id)) ids.push(id);
+      $('giftBoard').value = ids.slice(0, 12).join(','); $('giftBoard').dispatchEvent(new Event('change'));
+    };
+    box.append(b);
+  }
+}
+$('giftSearch').addEventListener('input', () => { if (!giftCatalog.length) send('catalog'); renderGiftResults(); });
 const people = new Map();
 let barBeers = 0;
 updatePhaseChip();
@@ -267,6 +288,7 @@ function connect(){
       $('lastDice').textContent = `Xâm gần nhất: ${m.viewer} · Xâm số ${m.sum} · ${m.label} (+${m.bonus} KC)`;
     }
     else if (m.t === 'bots') $('btnBots').textContent = m.on ? 'Tắt bot' : 'Bật bot';
+    else if (m.t === 'catalog') { giftCatalog = m.gifts; renderGiftResults(); }
   };
 }
 connect();

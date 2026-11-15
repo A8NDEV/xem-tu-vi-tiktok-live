@@ -54,7 +54,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:var(-
 #menuRows{display:grid;gap:6px}
 .mi{background:rgba(0,0,0,.3);border:1px solid rgba(255,200,90,.22);border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;gap:2px}
 .mi-top{display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:800;color:#fff4d6}
-.mi-sub{font-size:14px;color:var(--amber2);font-weight:600}
+.mi-sub{font-size:13px;color:var(--amber2);font-weight:600;white-space:nowrap}
+.mi-gifts{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:2px}
+.gf{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:#ffe9b8;font-weight:600;white-space:nowrap}
+.gf img{width:24px;height:24px;object-fit:contain;flex:none}
+.gf i{font-style:normal}
 #hexBox{text-align:center}
 #hexBars{display:flex;flex-direction:column-reverse;gap:6px;padding:8px 22px;margin:4px 0 8px;background:rgba(0,0,0,.35);border-radius:12px;border:1px solid rgba(255,200,90,.2)}
 .hbar{height:10px;display:flex;justify-content:space-between;align-items:center;position:relative}
@@ -399,15 +403,35 @@ function hideCards(){
   for (const id of ['cheer', 'beerCard', 'diceCard']) document.getElementById(id).classList.remove('show');
 }
 const KIND_KICKER = { rose: '🪙 GIEO QUẺ KHAI LỘC', beer: '📜 GIEO QUẺ LINH ỨNG', tower: '🐉 ĐẠI QUẺ THIÊN MỆNH', join: '☯ THIỆN TÍN HỮU DUYÊN' };
-function renderMenu(menu){
+// quà TikTok gợi ý cho mỗi mốc: hình + tên + giá xu (hình lỗi thì ẩn, chữ vẫn hiện)
+function giftChip(g){
+  const chip = document.createElement('span'); chip.className = 'gf';
+  if (g.img){
+    const im = document.createElement('img'); im.src = g.img; im.alt = ''; im.loading = 'eager'; im.referrerPolicy = 'no-referrer';
+    im.onerror = () => im.remove(); chip.append(im);
+  }
+  const t = document.createElement('i'); t.textContent = `${g.name} · ${g.coins} xu`; chip.append(t);
+  return chip;
+}
+function renderMenu(menu, dice){
   const box = document.getElementById('menuRows'); box.replaceChildren();
-  for (const item of (menu && menu.length ? menu : SC.MENU)){
+  const rows = menu && menu.length ? menu : SC.MENU;
+  for (const item of rows){
     const row = document.createElement('div'); row.className = 'mi';
     const top = document.createElement('div'); top.className = 'mi-top';
     top.textContent = `${item.icon || '🪙'} ${item.label}`;
-    const sub = document.createElement('div'); sub.className = 'mi-sub';
-    sub.textContent = item.desc || `${item.coins}+ KC · ${item.dur || 18}s`;
-    row.append(top, sub); box.append(row);
+    const sub = document.createElement('span'); sub.className = 'mi-sub';
+    sub.textContent = (item.desc || `${item.coins}+ KC`).replace(/\s*·.*$/, '');   // chỉ giữ khoảng KC (bỏ "· 18s…") cho vừa dòng
+    top.append(sub);   // mô tả mốc nằm cùng dòng với tên mốc cho gọn
+    row.append(top);
+    if (item.gifts && item.gifts.length){ const gs = document.createElement('div'); gs.className = 'mi-gifts'; item.gifts.forEach(g => gs.append(giftChip(g))); row.append(gs); }
+    box.append(row);
+  }
+  if (dice){
+    const row = document.createElement('div'); row.className = 'mi';
+    const top = document.createElement('div'); top.className = 'mi-top'; top.textContent = '🎋 Lắc Ống Xâm';
+    const gs = document.createElement('div'); gs.className = 'mi-gifts'; gs.append(giftChip(dice));
+    row.append(top, gs); box.append(row);
   }
 }
 renderMenu(SC.MENU);
@@ -628,7 +652,7 @@ function connect(){
         relayout(m.cap || 12);
         for (const p of m.viewers) addVisitor(p, true);
         totalBeers = Number.isFinite(m.barBeers) ? m.barBeers : sumBeers();
-        renderMenu(m.menu);
+        renderMenu(m.menu, m.dice);
         renderQueue(m.queue || []);
         activeReading = m.activeReading || null;
         updateOracleScroll(activeReading);
@@ -638,6 +662,7 @@ function connect(){
         Object.assign(settings, m.settings); applySettings();
         if (m.cap && m.cap !== cap) relayout(m.cap);
         break;
+      case 'menu': renderMenu(m.menu, m.dice); break;
       case 'join': if (m.cap && m.cap !== cap) relayout(m.cap); addVisitor(m.v, !!m.v.demo); updateCount(); renderMerit(); break;
       case 'leave': removeVisitor(m.id); break;
       case 'skin': { const v = visitors.get(m.id); if (v){ v.skin = m.skin; v.glow = .8; } break; }
