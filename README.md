@@ -67,11 +67,11 @@ Giá trị quà tính bằng **KC** (1 KC = 1 coin/diamond). Mỗi lần tặng 
 
 | Mốc Quẻ | Định mức KC | Thời lượng | Nội dung luận giải |
 |---|---|---|---|
-| 🪙 **Khai Lộc** | 10–29 KC | 18s | Luận nhanh việc bạn hỏi nên hay chưa nên, điểm cát hung chính |
-| 📜 **Phúc Lộc** | 30–69 KC | 25s | Phân tích theo hình tượng quẻ Kinh Dịch, hào động và lời khuyên |
-| ☯️ **Thiên Lộc** | 70–149 KC | 35s | Luận sâu vận hạn, thời điểm thuận lợi và quý nhân phù trợ |
-| 🐉 **Long Phượng** | 150–298 KC | 48s | Luận chi tiết cung mệnh, hướng hợp, màu sắc và hóa giải xung khắc |
-| 👑 **Thiên Mệnh** | 299+ KC | 65s | Đại quẻ toàn diện: thiên thời, địa lợi, nhân hòa, đại vận cả năm |
+| 🪙 **Khai Lộc** | 1–9 KC | 18s | Luận nhanh việc bạn hỏi nên hay chưa nên, điểm cát hung chính |
+| 📜 **Phúc Lộc** | 10–29 KC | 25s | Phân tích theo hình tượng quẻ Kinh Dịch, hào động và lời khuyên |
+| ☯️ **Thiên Lộc** | 30–69 KC | 35s | Luận sâu vận hạn, thời điểm thuận lợi và quý nhân phù trợ |
+| 🐉 **Long Phượng** | 70–149 KC | 48s | Luận chi tiết cung mệnh, hướng hợp, màu sắc và hóa giải xung khắc |
+| 👑 **Thiên Mệnh** | 150+ KC | 65s | Đại quẻ toàn diện: thiên thời, địa lợi, nhân hòa, đại vận cả năm |
 
 ### 6 Chủ Đề Xin Quẻ
 

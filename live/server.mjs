@@ -180,11 +180,11 @@ function skinFromText(t, current){
 const DEFAULT_SKINS = ['man', 'woman', 'cap', 'sexy', 'uncle', 'oldwoman'];
 
 const MENU = [
-  { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '10–29 KC · 18s' },
-  { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  dur: 25, unit: 'quẻ sâu',      icon: '📜', desc: '30–69 KC · 25s' },
-  { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 30,  dur: 35, unit: 'quẻ chi tiết', icon: '🔮', desc: '70–149 KC · 35s' },
-  { id: 'long_phuong', label: 'Long Phượng', coins: 70,  dur: 48, unit: 'đại quẻ',      icon: '🐉', desc: '150–298 KC · 48s' },
-  { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 150, dur: 65, unit: 'thiên mệnh',   icon: '👑', desc: '299+ KC · 65s' },
+  { id: 'khai_loc',    label: 'Khai Lộc',    coins: 1,   dur: 18, unit: 'quẻ ngắn',     icon: '🪙', desc: '1–9 KC · 18s' },
+  { id: 'phuc_loc',    label: 'Phúc Lộc',    coins: 10,  dur: 25, unit: 'quẻ sâu',      icon: '📜', desc: '10–29 KC · 25s' },
+  { id: 'thien_loc',   label: 'Thiên Lộc',   coins: 30,  dur: 35, unit: 'quẻ chi tiết', icon: '🔮', desc: '30–69 KC · 35s' },
+  { id: 'long_phuong', label: 'Long Phượng', coins: 70,  dur: 48, unit: 'đại quẻ',      icon: '🐉', desc: '70–149 KC · 48s' },
+  { id: 'thien_menh',  label: 'Thiên Mệnh',  coins: 150, dur: 65, unit: 'thiên mệnh',   icon: '👑', desc: '150+ KC · 65s' },
 ];
 
 const TOPICS = [
@@ -357,6 +357,15 @@ function orderFromCoins(coins, topicLabel){
   };
 }
 
+// Lời đọc của một quẻ. Mỗi câu độc lập với câu bên cạnh (dùng dấu phẩy thay dấu hai chấm) để tạo sẵn / dùng lại giọng đọc được.
+function composeReading(h, topicId, tierId, moving){
+  const topic = (TOPICS.find(x => x.id === topicId) || TOPICS[5]).label.toLowerCase();
+  let t = `Quẻ số ${h.num}, ${h.name}, ${h.rank}. ${h.verse} Luận về ${topic}, ${h.topics[topicId]}`;
+  if (tierId !== 'khai_loc') t += ` Động tại hào ${moving}, biến sang quẻ ${h.changed}. Lời khuyên của Ông Đồ, ${h.advice}`;
+  if (tierId === 'thien_loc' || tierId === 'long_phuong' || tierId === 'thien_menh') t += ` Thời điểm thuận lợi, ${h.lucky.time}.`;
+  if (tierId === 'long_phuong' || tierId === 'thien_menh') t += ` Quý nhân phù trợ, ${h.lucky.noble}. Hướng và màu hợp, ${h.lucky.dir}.`;
+  return t;
+}
 let hexSeq = 0;
 function buildHexagram(topicId = 'tong_quan', tierId = 'khai_loc'){
   const h = HEXAGRAMS[(hexSeq++ + Math.floor(Math.random() * HEXAGRAMS.length)) % HEXAGRAMS.length];
@@ -365,16 +374,7 @@ function buildHexagram(topicId = 'tong_quan', tierId = 'khai_loc'){
   const tpKey = h.topics[topicId] ? topicId : 'tong_quan';
   const topicObj = TOPICS.find(x => x.id === tpKey) || TOPICS[5];
   const mainText = h.topics[tpKey];
-  let fullReading = `Quẻ số ${h.num}: ${h.name} (${h.rank}). ${h.verse} Luận về ${topicObj.label.toLowerCase()}: ${mainText}`;
-  if (tierId !== 'khai_loc') {
-    fullReading += ` Động tại hào ${moving}, biến sang quẻ ${h.changed}. Lời khuyên của Ông Đồ: ${h.advice}`;
-  }
-  if (tierId === 'thien_loc' || tierId === 'long_phuong' || tierId === 'thien_menh') {
-    fullReading += ` Thời điểm thuận lợi: ${h.lucky.time}.`;
-  }
-  if (tierId === 'long_phuong' || tierId === 'thien_menh') {
-    fullReading += ` Quý nhân phù trợ: ${h.lucky.noble}. Hướng và màu hợp: ${h.lucky.dir}.`;
-  }
+  const fullReading = composeReading(h, tpKey, tierId, moving);
   return {
     num: h.num,
     name: h.name,
@@ -488,6 +488,7 @@ function seat(id, name, opts = {}){
   };
   viewers.set(id, v);
   broadcast({ t: 'join', v: pub(v), cap: capacity() });
+  if (!opts.demo && !/^(auto|bot|demo)_/.test(id)) prefetchName(v.name);
   return { v, isNew: true };
 }
 
@@ -502,6 +503,7 @@ const isCheer = t => /(^|\s)(nam\s*mo|cau\s*an|xin\s*que|khai\s*loc|hoan\s*hy|da
 
 function onChat(id, name, text, avatar){
   pacer.markReal(id);
+  if (!/^(auto|bot|demo)_/.test(String(id || ''))) prefetchName(name);
   text = String(text || '').slice(0, 120);
   rememberChat(id, text);
   const v = viewers.get(id);
@@ -537,7 +539,7 @@ function onFollow(id, name, avatar){
   const who = v?.name || String(name || 'thiện tín').slice(0, 18);
   broadcast({ t: 'follow', id, name: who });
   addLog(`☯ ${who} vào phòng Tử Vi Phát Đạt`);
-  say(`Hoan hỷ chào đón thí chủ ${spoken(who)} hữu duyên bước vào phòng Tử Vi Phát Đạt. Mời ngồi lên chiếu đỏ và bình luận chủ đề muốn gieo quẻ!`, { tag: 'follow', id });
+  say(`Thí chủ ${spoken(who)}. ${WELCOME_LINE}`, { tag: 'follow', id });
 }
 
 const ROSE_GIFTS = new Set(['hoa hong', 'rose', 'hong', 'khai loc']);
@@ -574,7 +576,7 @@ function onGift(id, name, giftName, count, diamonds, avatar, followed){
     return;
   }
 
-  const line = `Ông Đồ xin gieo quẻ ${order.tierLabel} cho thí chủ ${spoken(v.name)}, tổng công đức ${v.beers} kim cương. ${hex.fullReading}`;
+  const line = `Thí chủ ${spoken(v.name)}. Ông Đồ xin gieo quẻ ${order.tierLabel}. ${hex.fullReading}`;
   enqueueReading(v, order, hex, settings.gifts.readAll || beers >= settings.gifts.minDiamonds ? line : '');
   broadcast({
     t: 'beer', id, name: v.name, giftName, beers, total: v.beers,
@@ -583,6 +585,7 @@ function onGift(id, name, giftName, count, diamonds, avatar, followed){
   addLog(`☯ ${v.name} gieo ${order.text} (${beers} KC) → Quẻ số ${hex.num} ${hex.name}`);
 }
 
+const WELCOME_LINE = 'Hoan hỷ chào đón người hữu duyên bước vào phòng Tử Vi Phát Đạt. Mời ngồi lên chiếu đỏ và bình luận chủ đề muốn gieo quẻ!';
 const spoken = s => String(s).replace(/[_@.]+/g, ' ').replace(/[^\p{L}\p{N}\s]/gu, '').trim() || 'thiện tín';
 
 const CHALLENGES = [
@@ -615,7 +618,7 @@ function rollDiceFor(v, giftName = 'Xin Xâm', base = 0){
     bonus, gained, challenge, total: v.beers, barBeers: totalBeers, hex,
   });
   addLog(`🎋 ${v.name} xin xâm số ${sum} · ${label} (+${bonus} công đức, tổng ${v.beers} KC)`);
-  say(`Ông Đồ lắc ống xâm cho thí chủ ${spoken(v.name)}, rút được thẻ xâm số ${sum}, quẻ ${label}. ${challenge} Cộng thêm ${bonus} điểm công đức. Chúc thí chủ vạn sự cát tường!`, { tag: 'dice', id: v.id });
+  say(`Thí chủ ${spoken(v.name)}. Ông Đồ lắc ống xâm, rút được thẻ xâm số ${sum}, quẻ ${label}. ${challenge} Cộng thêm ${bonus} điểm công đức. Chúc thí chủ vạn sự cát tường!`, { tag: 'dice', id: v.id });
   if (cls === 'bao') broadcast({ t: 'toast', text: 'THƯỢNG THƯỢNG CÁT!', sub: `${v.name} rút được thẻ xâm Đại Cát` });
 }
 
@@ -624,11 +627,11 @@ const TTS_IDLE_MS = 5 * 60_000, TTS_TIMEOUT_MS = 20_000;
 const TTS_EDGE_PAUSE_MS = 30_000, TTS_CACHE_MAX = 300;
 const TTS_FAMILY = process.env.TTS_IP_FAMILY === '6' ? 6 : process.env.TTS_IP_FAMILY === '0' ? 0 : 4;
 const ttsAgent = new https.Agent({ keepAlive: true, family: TTS_FAMILY });
-let tts = null, ttsIdleTimer = null, ttsEdgeDownUntil = 0;
+let tts = null, ttsIdleTimer = null, ttsEdgeDownUntil = 0, edgeFails = 0;
 const ttsCache = new Map();
 // Bộ nhớ đệm giọng Edge trên đĩa: câu đã đọc một lần thì lần sau (kể cả sau khi mở lại server) có tiếng ngay,
 // vì Edge chậm và hay trả rỗng với câu mới nhưng xong trong ~0,5 giây với câu cũ. Quẻ miễn phí cho khách ảo lúc vắng cũng làm đầy dần kho này.
-const TTS_CACHE_DIR = path.join(__dirname, 'tts-cache'), TTS_DISK_MAX = 1500;
+const TTS_CACHE_DIR = path.join(__dirname, 'tts-cache'), TTS_DISK_MAX = 4000;
 fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
 try {
   const files = fs.readdirSync(TTS_CACHE_DIR).map(f => ({ f, t: fs.statSync(path.join(TTS_CACHE_DIR, f)).mtimeMs })).sort((a, b) => a.t - b.t);
@@ -671,7 +674,7 @@ function say(text, meta = {}){
 const TOAST_LINE = 'Ông Đồ chúc toàn thể thiện tín trong phòng tâm an vạn sự lành, cầu tài đắc tài, cầu duyên đắc duyên!';
 async function warmTTS(){
   if (ttsEngine() === 'google') return;
-  if (await findPython()){ startWorker(); speak(TOAST_LINE); return; }   // nạp sẵn worker + câu chúc phúc lặp lại
+  if (await findPython()){ startWorker(); return; }   // nạp sẵn worker Python
   try {
     await ttsClient().setMetadata(settings.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
     if (!ttsBusy) scheduleTTSIdle();
@@ -778,16 +781,24 @@ async function googleChunk(text){
 
 // Tối đa 3 đoạn tạo giọng cùng lúc: nhiều hơn thì Edge dễ từ chối.
 const SYNTH_MAX = 3, synthWait = []; let synthActive = 0;
-const synthSlot = () => synthActive < SYNTH_MAX ? (synthActive++, Promise.resolve()) : new Promise(r => synthWait.push(r));
-const synthFree = () => { const n = synthWait.shift(); if (n) n(); else synthActive--; };
+const lowWait = [];   // việc nền (tạo sẵn giọng): chỉ được dùng khi còn chừa ít nhất 1 chỗ cho giọng đang cần đọc
+const synthSlot = low => low
+  ? (synthActive < SYNTH_MAX - 1 ? (synthActive++, Promise.resolve()) : new Promise(r => lowWait.push(r)))
+  : (synthActive < SYNTH_MAX ? (synthActive++, Promise.resolve()) : new Promise(r => synthWait.push(r)));
+const synthFree = () => {
+  const n = synthWait.shift();
+  if (n) return n();
+  if (lowWait.length && synthActive <= SYNTH_MAX - 1) return lowWait.shift()();
+  synthActive--;
+};
 const BYTES_PER_SEC = { edge: 6000, google: 4000 };   // MP3 48 kbps (Edge 24 kHz) / 32 kbps (Google)
 
-async function edgeAudio(text){
+async function edgeAudio(text, low = false){
   const key = cacheKey(`edge|${settings.voice}|${settings.pitch}|${settings.rate}`, text);
   const hit = cacheGet(key); if (hit) return hit;
   const file = diskFile(key);
   try { const buf = fs.readFileSync(file); if (buf.length >= 1024){ cachePut(key, buf); return buf; } } catch {}
-  await synthSlot();
+  await synthSlot(low);
   try {
     const audio = await synthChunkSafe(text); cachePut(key, audio);
     try { fs.writeFileSync(file, audio); } catch {}
@@ -800,10 +811,14 @@ async function chunkAudio(text){
   const order = ttsEngine() === 'google' || Date.now() < ttsEdgeDownUntil ? ['google', 'edge'] : ['edge', 'google'];
   let last;
   for (const engine of order){
-    try { return { audio: await (engine === 'google' ? googleChunk : edgeAudio)(text), engine }; }
+    try { const audio = await (engine === 'google' ? googleChunk : edgeAudio)(text); if (engine === 'edge') edgeFails = 0; return { audio, engine }; }
     catch (e) {
       last = e;
-      if (engine === 'edge'){ ttsEdgeDownUntil = Date.now() + TTS_EDGE_PAUSE_MS; addLog(`Edge TTS trục trặc, dùng giọng Google: ${e?.message || e}`); }
+      if (engine === 'edge'){
+        // Một đoạn hỏng chỉ đọc đoạn đó bằng Google; hỏng liền 3 đoạn mới coi Edge đang sập và đổi hẳn trong 30 giây
+        if (++edgeFails >= 3){ edgeFails = 0; ttsEdgeDownUntil = Date.now() + TTS_EDGE_PAUSE_MS; }
+        addLog(`Edge TTS trục trặc, đoạn này dùng giọng Google: ${e?.message || e}`);
+      }
     }
   }
   addLog('TTS lỗi: ' + (last?.message || last));
@@ -813,6 +828,41 @@ async function chunkAudio(text){
 function speak(text){
   const parts = splitChunks(text).map(c => chunkAudio(c).catch(() => null));
   return { text, parts, first: parts[0].then(() => {}) };
+}
+// Tạo sẵn giọng đọc tên ("Thí chủ <tên>.") ngay khi người xem xuất hiện, để lúc họ tặng quà là có tiếng liền.
+const prefetched = new Set();
+function prefetchName(name){
+  const n = spoken(name);
+  if (!n || ttsEngine() === 'google' || prefetched.has(n) || lowWait.length > 30) return;
+  if (prefetched.size > 3000) prefetched.clear();
+  prefetched.add(n);
+  edgeAudio(`Thí chủ ${n}.`, true).catch(() => {});
+}
+// Mọi câu cố định mà Ông Đồ có thể nói. Kho quẻ hữu hạn nên tạo sẵn một lần (vài phút), từ đó đọc quẻ chỉ còn chờ đúng câu tên.
+function staticSentences(){
+  const set = new Set();
+  const add = t => splitChunks(t).forEach(c => set.add(c));
+  [TOAST_LINE, WELCOME_LINE, 'Chúc thí chủ vạn sự cát tường!', ...CHALLENGES, ...[1, 2, 3].map(b => `Cộng thêm ${b} điểm công đức.`)].forEach(add);
+  for (const t of MENU) add(`Ông Đồ xin gieo quẻ ${t.label}.`);
+  add('Ông Đồ xin gieo quẻ Khai Lộc.');
+  for (let sum = 3; sum <= 18; sum++) for (const label of ['THƯỢNG THƯỢNG CÁT!', 'ĐẠI CÁT · VƯỢNG LỘC', 'THƯỢNG CÁT · BÌNH AN', 'TRUNG BÌNH · TĨNH TÂM']) add(`Ông Đồ lắc ống xâm, rút được thẻ xâm số ${sum}, quẻ ${label}.`);
+  for (const h of HEXAGRAMS) for (const tp of TOPICS) for (const tier of ['khai_loc', 'phuc_loc', 'thien_loc', 'long_phuong']) for (const moving of tier === 'khai_loc' ? [1] : [1, 2, 3, 4, 5, 6]) add(composeReading(h, tp.id, tier, moving));
+  return [...set];
+}
+const prerender = { running: false, total: 0, done: 0, failed: 0, key: '' };
+async function prerenderVoice(){
+  const keyNow = () => `${settings.voice}|${settings.pitch}|${settings.rate}`;
+  if (prerender.running || ttsEngine() === 'google') return;
+  Object.assign(prerender, { running: true, done: 0, failed: 0, key: keyNow() });
+  const list = staticSentences(); prerender.total = list.length;
+  addLog(`Bắt đầu tạo sẵn giọng ${list.length} câu cố định (chạy nền, nhường giọng đang đọc)`);
+  for (const text of list){
+    while (activeReading || ttsBusy || ttsQueue.length) await sleep(2000);   // nhường live
+    if (keyNow() !== prerender.key){ prerender.running = false; return prerenderVoice(); }   // đổi giọng / độ trầm giữa chừng → làm lại
+    try { await edgeAudio(text, true); prerender.done++; } catch { prerender.failed++; }
+  }
+  prerender.running = false;
+  addLog(`Đã tạo sẵn giọng ${prerender.done}/${prerender.total} câu${prerender.failed ? `, lỗi ${prerender.failed} câu (sẽ thử lại lần mở server sau)` : ''}`);
 }
 let voiceFreeAt = 0;   // ước tính lúc overlay đọc xong mọi thứ đã gửi (để thẻ quẻ khớp với tiếng)
 async function emitSpeech(sp, meta = {}){
@@ -1019,7 +1069,7 @@ function onControl(m){
       const voiceKey = () => `${settings.voice}|${settings.pitch}|${settings.rate}`, before = voiceKey();
       applySettings(m.settings || {});
       if (!settings.autoPace) pacer.clearAll();
-      if (voiceKey() !== before && ttsEngine() === 'edge') speak(TOAST_LINE);   // tạo sẵn câu chúc phúc với giọng mới
+      if (voiceKey() !== before && ttsEngine() === 'edge') prerenderVoice();   // giọng / độ trầm mới → tạo sẵn lại kho câu cố định
       saveSettings();
       scheduleToast(); broadcast({ t:'settings', settings, cap: capacity(), barBeers: totalBeers }); break;
     }
@@ -1069,7 +1119,7 @@ try { applySettings(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))); schedul
 function freeReading(v){
   const hex = buildHexagram(v.topicId || 'tong_quan', 'khai_loc');
   v.asked = true;
-  enqueueReading(v, { ...orderFromCoins(1, v.topic), coins: 0 }, hex, `Ông Đồ xin gieo quẻ khai lộc cho thí chủ ${spoken(v.name)}. ${hex.fullReading}`);
+  enqueueReading(v, { ...orderFromCoins(1, v.topic), coins: 0 }, hex, `Thí chủ ${spoken(v.name)}. Ông Đồ xin gieo quẻ Khai Lộc. ${hex.fullReading}`);
   addLog(`🎭 Ông Đồ gieo quẻ khai lộc cho khách ảo ${v.name} → Quẻ số ${hex.num} ${hex.name}`);
 }
 const pacer = createPacer({
@@ -1185,6 +1235,6 @@ wss.on('connection', (ws, req) => {
 });
 server.listen(PORT, HOST, () => {
   addLog(`Server Tử Vi Phát Đạt (BEAR) chạy tại http://localhost:${PORT}  ·  Bảng điều khiển: http://localhost:${PORT}/live/control.html  ·  Overlay: http://localhost:${PORT}/live/overlay.html`);
-  setTimeout(warmTTS, 1200);
+  setTimeout(() => warmTTS().then(prerenderVoice), 1200);
   pacer.start();
 });
